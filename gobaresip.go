@@ -1,71 +1,5 @@
 package gobaresip
 
-/*
-#cgo linux LDFLAGS: ${SRCDIR}/libbaresip/baresip/libbaresip.a
-#cgo linux LDFLAGS: ${SRCDIR}/libbaresip/re/libre.a
-#cgo linux LDFLAGS: ${SRCDIR}/libbaresip/rem/librem.a
-#cgo linux LDFLAGS: ${SRCDIR}/libbaresip/opus/libopus.a
-#cgo linux LDFLAGS: ${SRCDIR}/libbaresip/openssl/libssl.a
-#cgo linux LDFLAGS: ${SRCDIR}/libbaresip/openssl/libcrypto.a
-#cgo linux LDFLAGS: -ldl -lm
-
-#include <stdint.h>
-#include <stdlib.h>
-#include <libbaresip/re/include/re.h>
-#include <libbaresip/rem/include/rem.h>
-#include <libbaresip/baresip/include/baresip.h>
-
-static void signal_handler(int sig)
-{
-	static bool term = false;
-
-	if (term) {
-		module_app_unload();
-		mod_close();
-		exit(0);
-	}
-
-	term = true;
-
-	info("terminated by signal %d\n", sig);
-
-	ua_stop_all(false);
-}
-
-static void net_change_handler(void *arg)
-{
-	(void)arg;
-
-	info("IP-address changed: %j\n",
-	     net_laddr_af(baresip_network(), AF_INET));
-
-	(void)uag_reset_transp(true, true);
-}
-
-static void set_net_change_handler()
-{
-	net_change(baresip_network(), 60, net_change_handler, NULL);
-}
-
-static void ua_exit_handler(void *arg)
-{
-	(void)arg;
-	debug("ua exited -- stopping main runloop\n");
-
-	//The main run-loop can be stopped now
-	re_cancel();
-}
-
-static void set_ua_exit_handler()
-{
-	uag_set_exit_handler(ua_exit_handler, NULL);
-}
-
-int mainLoop(){
-	return re_main(signal_handler);
-}
-*/
-import "C"
 import (
 	"bytes"
 	"fmt"
@@ -82,7 +16,7 @@ import (
 	"github.com/goccy/go-json"
 )
 
-//ResponseMsg
+// ResponseMsg
 type ResponseMsg struct {
 	Response bool   `json:"response,omitempty"`
 	Ok       bool   `json:"ok,omitempty"`
@@ -91,7 +25,7 @@ type ResponseMsg struct {
 	RawJSON  []byte `json:"-"`
 }
 
-//EventMsg
+// EventMsg
 type EventMsg struct {
 	Event           bool   `json:"event,omitempty"`
 	Type            string `json:"type,omitempty"`
