@@ -2,7 +2,6 @@ package gobaresip
 
 import (
 	"bytes"
-	"fmt"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -10,56 +9,70 @@ import (
 	"unicode"
 
 	"github.com/goccy/go-json"
+	"github.com/markdingo/netstring"
 )
 
 /*
-  /about                           About box
-  /accept                 a        Accept incoming call
-  /acceptdir ..                    Accept incoming call with audio and videodirection.
-  /answermode ..                   Set answer mode
-  /aubitrate ..                    Set audio bitrate
-  /audio_debug            A        Audio stream
-  /auplay ..                       Switch audio player
-  /ausrc ..                        Switch audio source
-  /callfind ..                     Find call
-  /callstat               c        Call status
-  /contact_next           >        Set next contact
-  /contact_prev           <        Set previous contact
-  /contacts               C        List contacts
-  /dial ..                d ..     Dial
-  /dialcontact            D        Dial current contact
-  /dialdir ..                      Dial with audio and videodirection.
-  /dnd ..                          Set Do not Disturb
-  /hangup                 b        Hangup call
-  /hangupall ..                    Hangup all calls with direction
-  /help                   h        Help menu
-  /hold                   x        Call hold
-  /insmod ..                       Load module
-  /line ..                @ ..     Set current call
-  /listcalls              l        List active calls
-  /medialdir ..                    Set local media direction
-  /message ..             M ..     Message current contact
-  /mute                   m        Call mute/un-mute
-  /options ..             o ..     Options
-  /quit                   q        Quit
-  /reginfo                r        Registration info
-  /reinvite               I        Send re-INVITE
-  /resume                 X        Call resume
-  /rmmod ..                        Unload module
-  /setadelay ..                    Set answer delay for outgoing call
-  /sndcode ..                      Send Code
-  /statmode               S        Statusmode toggle
-  /tlsissuer                       TLS certificate issuer
-  /tlssubject                      TLS certificate subject
-  /transfer ..            t ..     Transfer call
-  /uadel ..                        Delete User-Agent
-  /uadelall ..                     Delete all User-Agents
-  /uafind ..                       Find User-Agent
-  /uanew ..                        Create User-Agent
-  /uareg ..                        UA register  [index]
-  /video_debug            V        Video stream
-  /videodir ..                     Set video direction
-  /vidsrc ..                       Switch video source
+	See https://github.com/baresip/baresip/wiki/Commands-registry
+
+  /100rel ..                   Set 100rel mode
+  /about                       About box
+  /accept             a        Accept incoming call
+  /acceptdir ..                Accept incoming call with audio and videodirection.
+  /addcontact ..               Add a contact
+  /answermode ..               Set answer mode
+  /apistate                    User Agent state
+  /aufileinfo ..               Audio file info
+  /auplay ..                   Switch audio player
+  /ausrc ..                    Switch audio source
+  /callstat           c        Call status
+  /conf_reload                 Reload config file
+  /config                      Print configuration
+  /contact_next       >        Set next contact
+  /contact_prev       <        Set previous contact
+  /contacts           C        List contacts
+  /dial ..            d ..     Dial
+  /dialcontact        D        Dial current contact
+  /dialdir ..                  Dial with audio and videodirection.
+  /dnd ..                      Set Do not Disturb
+  /entransp ..                 Enable/Disable transport
+  /hangup             b        Hangup call
+  /hangupall ..                Hangup all calls with direction
+  /help               h        Help menu
+  /insmod ..                   Load module
+  /listcalls          l        List active calls
+  /loglevel           v        Log level toggle
+  /main                        Main loop debug
+  /memstat            y        Memory status
+  /message ..         M ..     Message current contact
+  /modules                     Module debug
+  /netchange                   Inform netroam about a network change
+  /netstat            n        Network debug
+  /options ..         o ..     Options
+  /play ..                     Play audio file
+  /quit               q        Quit
+  /refer ..           R ..     Send REFER outside dialog
+  /reginfo            r        Registration info
+  /rmcontact ..                Remove a contact
+  /rmmod ..                    Unload module
+  /setadelay ..                Set answer delay for outgoing call
+  /setansval ..                Set value for Call-Info/Alert-Info
+  /sipstat            i        SIP debug
+  /sysinfo            s        System info
+  /timers                      Timer debug
+  /tlsissuer                   TLS certificate issuer
+  /tlssubject                  TLS certificate subject
+  /uaaddheader ..              Add custom header to UA
+  /uadel ..                    Delete User-Agent
+  /uadelall ..                 Delete all User-Agents
+  /uafind ..                   Find User-Agent <aor>
+  /uanew ..                    Create User-Agent
+  /uareg ..                    UA register <regint> [index]
+  /uarmheader ..               Remove custom header from UA
+  /uastat             u        UA debug
+  /uuid                        Print UUID
+  /vidsrc ..                   Switch video source
+
 */
 
 // CommandMsg struct for ctrl_tcp
@@ -69,35 +82,36 @@ type CommandMsg struct {
 	Token   string `json:"token,omitempty"`
 }
 
-func buildCommand(command, params, token string) *CommandMsg {
-	return &CommandMsg{
+// Cmd will send a raw baresip command over ctrl_tcp.
+func (b *Baresip) Cmd(command, params, token string) error {
+	msg, err := json.Marshal(&CommandMsg{
 		Command: command,
 		Params:  params,
 		Token:   token,
-	}
-}
-
-// Cmd will send a raw baresip command over ctrl_tcp.
-func (b *Baresip) Cmd(command, params, token string) error {
-	msg, err := json.Marshal(buildCommand(command, params, token))
+	})
 	if err != nil {
 		return err
 	}
 
-	if atomic.LoadUint32(&b.ctrlConnAlive) == 0 {
-		return fmt.Errorf("can't write command to closed tcp_ctrl connection")
-	}
-
+	success := false
+	b.ctrlConnTxMutex.Lock()
+	// FIXME: make write deadline configurable
 	err = b.ctrlConn.SetWriteDeadline(time.Now().Add(2 * time.Second))
-	if err != nil {
-		return err
+	if err == nil {
+		err = b.ctrlConnEnc.EncodeString(netstring.NoKey, string(msg))
+		if err == nil {
+			success = true
+		}
 	}
-	_, err = b.ctrlConn.Write([]byte(fmt.Sprintf("%d:%s,", len(msg), msg))) //nolint:staticcheck
-	if err != nil {
-		return err
+	b.ctrlConnTxMutex.Unlock()
+
+	if success {
+		b.successfulCmds++
+	} else {
+		b.failedCmds++
 	}
 
-	return nil
+	return err
 }
 
 // CmdAccept will accept incoming call

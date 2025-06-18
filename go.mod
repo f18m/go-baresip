@@ -4,4 +4,9 @@ go 1.24
 
 require github.com/goccy/go-json v0.6.1
 
-require github.com/markdingo/netstring v1.0.2
+require (
+	github.com/markdingo/netstring v1.0.2
+	go.uber.org/zap v1.27.0
+)
+
+require go.uber.org/multierr v1.11.0 // indirect

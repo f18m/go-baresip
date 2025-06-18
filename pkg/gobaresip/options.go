@@ -57,3 +57,11 @@ func SetUserAgent(opt string) func(*Baresip) error {
 		return nil
 	}
 }
+
+// SetLogger sets the logger for Baresip.
+func SetLogger(lgr Logger) func(*Baresip) error {
+	return func(b *Baresip) error {
+		b.logger = lgr
+		return nil
+	}
+}

@@ -25,7 +25,7 @@ config:
       theme: redux
 ---
 flowchart TD
-      CLIENT("Final client")
+      CLIENT("Actual client")
       subgraph docker [Docker container]
       BARESIP("baresip")
       DEPENDENCIES(["Baresip dependencies:<br>audio codecs, modules, etc"])
@@ -34,8 +34,10 @@ flowchart TD
       BARESIP --Uses--> DEPENDENCIES
       GOLANGAPP --TCP socket--> BARESIP
       end
-      CLIENT --WebServer--> GOLANGAPP
+      CLIENT --YourInterface--> GOLANGAPP
 ```
+
+Of course the `Actual client` and the `golang app` are up to you to design to fit your needs.
 
 
 ## Original project
