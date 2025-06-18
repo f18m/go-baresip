@@ -13,6 +13,31 @@ An example golang application using these packages is available as [example](./e
 * the golang `Baresip` type will connect to the TCP port and will listen to `baresip` notifications (e.g. "incoming call", etc) and provides easy methods to send commands to the `baresip` binary
 
 
+## Typical Application
+
+Since `baresip` has many dependencies (mainly to support a wide variety of audio and video CODECs), several config files, and is not widely available as native package (e.g. RPM, Debian pkg), the intended usecase for this library
+is to run your golang application within a Docker container containing also your custom build of the `baresip` binary with all required dynamic libraries and configuration files.
+
+
+```mermaid
+---
+config:
+      theme: redux
+---
+flowchart TD
+      CLIENT("Final client")
+      subgraph docker [Docker container]
+      BARESIP("baresip")
+      DEPENDENCIES(["Baresip dependencies:<br>audio codecs, modules, etc"])
+      GOLANGAPP("Your golang app<br>(using go-baresip)")
+
+      BARESIP --Uses--> DEPENDENCIES
+      GOLANGAPP --TCP socket--> BARESIP
+      end
+      CLIENT --WebServer--> GOLANGAPP
+```
+
+
 ## Original project
 
 This repository was born as a fork from https://github.com/negbie/go-baresip, which is unmaintained.
