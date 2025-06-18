@@ -1,6 +1,6 @@
-module github.com/negbie/go-baresip
+module github.com/f18m/go-baresip
 
-go 1.16
+go 1.24
 
 require (
 	github.com/goccy/go-json v0.6.1

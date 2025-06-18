@@ -4,7 +4,7 @@ import (
 	"log"
 	"time"
 
-	gobaresip "github.com/negbie/go-baresip"
+	gobaresip "github.com/f18m/go-baresip"
 )
 
 func main() {

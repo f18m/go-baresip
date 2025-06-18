@@ -11,7 +11,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"github.com/goccy/go-json"
 )
@@ -255,86 +254,88 @@ func (b *Baresip) keepActive() {
 
 // setup a baresip instance
 func (b *Baresip) setup() error {
-
-	ua := C.CString(b.userAgent)
-	defer C.free(unsafe.Pointer(ua))
-
-	C.sys_coredump_set(1)
-
-	err := C.libre_init()
-	if err != 0 {
-		log.Printf("libre init failed with error code %d\n", err)
-		return b.end(err)
-	}
-
-	if b.debug {
-		C.log_enable_stdout(1)
-	} else {
-		C.log_enable_stdout(0)
-	}
-
-	if b.configPath != "" {
-		cp := C.CString(b.configPath)
-		defer C.free(unsafe.Pointer(cp))
-		C.conf_path_set(cp)
-	}
-
-	err = C.conf_configure()
-	if err != 0 {
-		log.Printf("baresip configure failed with error code %d\n", err)
-		return b.end(err)
-	}
-
-	// Top-level baresip struct init must be done AFTER configuration is complete.
-	err = C.baresip_init(C.conf_config())
-	if err != 0 {
-		log.Printf("baresip main init failed with error code %d\n", err)
-		return b.end(err)
-	}
-
-	if b.audioPath != "" {
-		ap := C.CString(b.audioPath)
-		defer C.free(unsafe.Pointer(ap))
-		C.play_set_path(C.baresip_player(), ap)
-	}
-
-	err = C.ua_init(ua, 1, 1, 1)
-	if err != 0 {
-		log.Printf("baresip ua init failed with error code %d\n", err)
-		return b.end(err)
-	}
-
-	C.set_net_change_handler()
-	C.set_ua_exit_handler()
-
-	err = C.conf_modules()
-	if err != 0 {
-		log.Printf("baresip load modules failed with error code %d\n", err)
-		return b.end(err)
-	}
-
-	if b.debug {
-		C.log_enable_debug(1)
-		C.uag_enable_sip_trace(1)
-	} else {
-		C.log_enable_debug(0)
-		C.uag_enable_sip_trace(0)
-	}
-
 	/*
-		ua_eprm := C.CString("")
-		defer C.free(unsafe.Pointer(ua_eprm))
-		err = C.uag_set_extra_params(ua_eprm)
+		ua := C.CString(b.userAgent)
+		defer C.free(unsafe.Pointer(ua))
+
+		C.sys_coredump_set(1)
+
+		err := C.libre_init()
+		if err != 0 {
+			log.Printf("libre init failed with error code %d\n", err)
+			return b.end(err)
+		}
+
+		if b.debug {
+			C.log_enable_stdout(1)
+		} else {
+			C.log_enable_stdout(0)
+		}
+
+		if b.configPath != "" {
+			cp := C.CString(b.configPath)
+			defer C.free(unsafe.Pointer(cp))
+			C.conf_path_set(cp)
+		}
+
+		err = C.conf_configure()
+		if err != 0 {
+			log.Printf("baresip configure failed with error code %d\n", err)
+			return b.end(err)
+		}
+
+		// Top-level baresip struct init must be done AFTER configuration is complete.
+		err = C.baresip_init(C.conf_config())
+		if err != 0 {
+			log.Printf("baresip main init failed with error code %d\n", err)
+			return b.end(err)
+		}
+
+		if b.audioPath != "" {
+			ap := C.CString(b.audioPath)
+			defer C.free(unsafe.Pointer(ap))
+			C.play_set_path(C.baresip_player(), ap)
+		}
+
+		err = C.ua_init(ua, 1, 1, 1)
+		if err != 0 {
+			log.Printf("baresip ua init failed with error code %d\n", err)
+			return b.end(err)
+		}
+
+		C.set_net_change_handler()
+		C.set_ua_exit_handler()
+
+		err = C.conf_modules()
+		if err != 0 {
+			log.Printf("baresip load modules failed with error code %d\n", err)
+			return b.end(err)
+		}
+
+		if b.debug {
+			C.log_enable_debug(1)
+			C.uag_enable_sip_trace(1)
+		} else {
+			C.log_enable_debug(0)
+			C.uag_enable_sip_trace(0)
+		}
+
+			ua_eprm := C.CString("")
+			defer C.free(unsafe.Pointer(ua_eprm))
+			err = C.uag_set_extra_params(ua_eprm)
 	*/
 
+	// FIXME: launch the "baresip" process with the correct arguments
+
 	if err := b.connectCtrl(); err != nil {
-		b.end(1)
+		//b.end(1)
 		return err
 	}
 
 	return nil
 }
 
+/*
 // Run a baresip instance
 func (b *Baresip) Run() error {
 	go b.read()
@@ -367,3 +368,4 @@ func (b *Baresip) end(err C.int) error {
 
 	return fmt.Errorf("%d", err)
 }
+*/
