@@ -1,0 +1,79 @@
+#
+# This pipeline is testing and building the golang packages and example
+#
+name: "Main CI"
+
+on: 
+  push:
+    branches:
+      - '**'
+    tags:
+      - '*'
+  # add a cron job to run every month -- ensure there's a valid CI build every month
+  # this is also useful to check if something breaks e.g. due to infrastructure changes (e.g. Ubuntu OS)
+  # and there are no commits for a long time on the project
+  schedule:
+    - cron: '0 0 1 * *'
+
+jobs:
+  unit_tests:
+    name: Golang Tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Build golang code
+        run: |
+          CGO_ENABLED=0 GOOS=linux go build -mod=readonly -v -o bin/example example/main.go
+
+      - name: Run unit tests
+        run: |
+          go test -v -cover ./...
+
+  golangci:
+    name: Linter
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.1.0
+        
+  check_tag:
+    name: Check if Tag Build
+    runs-on: ubuntu-latest
+    outputs:
+      is_tag: ${{ steps.check.outputs.is_tag }}
+
+    steps:
+    - name: Check if it's a tagged release
+      id: check
+      run: |
+        echo "GITHUB_REF is: ${GITHUB_REF}"
+        if [[ -n "${GITHUB_REF##*refs/tags/*}" ]]; then
+          echo "This looks like a non-TAG build"
+          echo "is_tag=false" >> $GITHUB_ENV
+          echo "is_tag=false" >> $GITHUB_OUTPUT
+        else
+          echo "This looks like a TAG build"
+          echo "is_tag=true" >> $GITHUB_ENV
+          echo "is_tag=true" >> $GITHUB_OUTPUT
+        fi
+    - run: |
+        echo "This is a TAG build"
+      if: ${{ steps.check.outputs.is_tag == 'true' }}
+    - run: |
+        echo "This is a non-TAG build"
+      if: ${{ steps.check.outputs.is_tag == 'false' }}

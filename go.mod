@@ -7,4 +7,4 @@ require (
 	github.com/gorilla/websocket v1.4.2
 )
 
-require github.com/markdingo/netstring v1.0.2 // indirect
+require github.com/markdingo/netstring v1.0.2

@@ -24,7 +24,7 @@ coverage:
 
 build-example:
 	@go mod download
-	CGO_ENABLED=0 GOOS=linux go build -mod=readonly -v -o bin/${APP_NAME} example/main.go
+	CGO_ENABLED=0 GOOS=linux go build -mod=readonly -v -o bin/example example/main.go
 
 clean: docker-clean
 	@echo Cleaning...
