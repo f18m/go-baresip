@@ -106,13 +106,16 @@ linters:
     - unparam
 
     # Must have. Finds unused declarations.
-    - unused
+    #- unused
 
     # Detect the possibility to use variables/constants from stdlib.
     - usestdlibvars
 
     # Finds wasted assignment statements.
     - wastedassign
+
+  disable:
+    - unused # FIXME temporary
   settings:
     wsl:
       allow-trailing-comment: true

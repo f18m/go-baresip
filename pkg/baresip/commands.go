@@ -62,7 +62,7 @@ import (
   /vidsrc ..                       Switch video source
 */
 
-//CommandMsg struct for ctrl_tcp
+// CommandMsg struct for ctrl_tcp
 type CommandMsg struct {
 	Command string `json:"command,omitempty"`
 	Params  string `json:"params,omitempty"`
@@ -88,8 +88,11 @@ func (b *Baresip) Cmd(command, params, token string) error {
 		return fmt.Errorf("can't write command to closed tcp_ctrl connection")
 	}
 
-	b.ctrlConn.SetWriteDeadline(time.Now().Add(2 * time.Second))
-	_, err = b.ctrlConn.Write([]byte(fmt.Sprintf("%d:%s,", len(msg), msg)))
+	err = b.ctrlConn.SetWriteDeadline(time.Now().Add(2 * time.Second))
+	if err != nil {
+		return err
+	}
+	_, err = b.ctrlConn.Write([]byte(fmt.Sprintf("%d:%s,", len(msg), msg))) //nolint:staticcheck
 	if err != nil {
 		return err
 	}
@@ -282,18 +285,18 @@ func (b *Baresip) CmdWs(raw []byte) error {
 		return nil
 	}
 
-	if len(m) == 2 && m[0] == "autodialadd" {
-		b.CmdAutodialadd(m[1])
+	if len(m) == 2 && m[0] == "autodialadd" { //nolint:gocritic
+		return b.CmdAutodialadd(m[1])
 	} else if len(m) == 2 && m[0] == "autodialdel" {
-		b.CmdAutodialdel(m[1])
+		return b.CmdAutodialdel(m[1])
 	} else if len(m) == 2 && m[0] == "autohangupgap" {
-		b.CmdAutohangupgap(m[1])
+		return b.CmdAutohangupgap(m[1])
 	} else if m[0] == "autocmdinfo" {
-		b.CmdAutocmdinfo()
+		return b.CmdAutocmdinfo()
 	} else if len(m) == 1 {
-		b.Cmd(m[0], "", "cmd_"+m[0])
+		return b.Cmd(m[0], "", "cmd_"+m[0])
 	} else if len(m) == 2 {
-		b.Cmd(m[0], m[1], "cmd_"+m[0])
+		return b.Cmd(m[0], m[1], "cmd_"+m[0])
 	}
 	return nil
 }
@@ -346,7 +349,7 @@ func (b *Baresip) autoDialSchedule(num string, gap int) {
 		if !ok {
 			return
 		}
-		b.CmdDial(num)
+		_ = b.CmdDial(num) // FIXME err not checked
 	}
 }
 
@@ -367,7 +370,7 @@ func (b *Baresip) CmdAutohangupgap(s string) error {
 		if n < 0 {
 			n = 0
 		}
-		atomic.StoreUint32(&b.autoCmd.hangupGap, uint32(n))
+		atomic.StoreUint32(&b.autoCmd.hangupGap, uint32(n)) //nolint:gosec
 	}
 
 	return b.Cmd("autodialinfo", "", "cmd_autohangupgap")

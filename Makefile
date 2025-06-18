@@ -1,6 +1,6 @@
 # go-baresip Makefile
 
-all: build
+all: build-example lint test
 
 
 # ---------------------------------------------------------------------------- #

@@ -1,13 +1,6 @@
 package gobaresip
 
-import (
-	"html/template"
-	"log"
-	"net/http"
-	"time"
-
-	"github.com/gorilla/websocket"
-)
+/* WEBSOCKET SUPPORT DISABLED
 
 const (
 	// Time allowed to write a message to the peer.
@@ -220,7 +213,7 @@ function simpleSearch() {
     }
     var filter = input.value.toLowerCase();
     var nodes = document.getElementsByClassName('list');
-  
+
     for (i = 0; i < nodes.length; i++) {
         if (nodes[i].innerText.toLowerCase().includes(filter)) {
             nodes[i].style.display = "block";
@@ -280,7 +273,7 @@ window.onload = function () {
                     j["data"] = j["data"].trim().replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '');
                 }
                 item.innerText = JSON.stringify(j, undefined, 2);
-                
+
                 appendLog(item);
                 simpleSearch();
             }
@@ -346,3 +339,4 @@ window.onload = function () {
 </body>
 </html>
 `))
+*/

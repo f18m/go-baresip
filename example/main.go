@@ -8,7 +8,6 @@ import (
 )
 
 func main() {
-
 	gb, err := gobaresip.New(
 		gobaresip.SetAudioPath("sounds"),
 		gobaresip.SetConfigPath("."),

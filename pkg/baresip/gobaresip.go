@@ -7,8 +7,6 @@ import (
 	"io"
 	"log"
 	"net"
-	"net/http"
-	_ "net/http/pprof"
 	"os/exec"
 	"sync"
 	"sync/atomic"
@@ -91,6 +89,7 @@ func New(options ...func(*Baresip) error) (*Baresip, error) {
 
 	b.autoCmd.num = make(map[string]int)
 
+	/* WEBSOCKET SUPPORT DISABLED
 	if b.wsAddr != "" {
 		b.responseWsChan = make(chan []byte, 100)
 		b.eventWsChan = make(chan []byte, 100)
@@ -103,7 +102,7 @@ func New(options ...func(*Baresip) error) (*Baresip, error) {
 			serveWs(h, w, r)
 		})
 		go http.ListenAndServe(b.wsAddr, nil)
-	}
+	}*/
 
 	if err := b.setup(); err != nil {
 		return nil, err
@@ -120,7 +119,7 @@ func (b *Baresip) connectCtrl() error {
 	b.ctrlConn, err = net.Dial("tcp", b.ctrlAddr)
 	if err != nil {
 		atomic.StoreUint32(&b.ctrlConnAlive, 0)
-		return fmt.Errorf("%v: please make sure ctrl_tcp is enabled", err)
+		return fmt.Errorf("%w: please make sure ctrl_tcp is enabled", err)
 	}
 	b.ctrlStream = netstring.NewDecoder(b.ctrlConn)
 
@@ -129,12 +128,9 @@ func (b *Baresip) connectCtrl() error {
 }
 
 func (b *Baresip) read() {
-	for {
-		if atomic.LoadUint32(&b.ctrlConnAlive) == 0 {
-			break
-		}
+	for atomic.LoadUint32(&b.ctrlConnAlive) != 0 {
 
-		//msg, err := b.ctrlStream.readNetstring()
+		// msg, err := b.ctrlStream.readNetstring()
 		k, v, err := b.ctrlStream.DecodeKeyed()
 		if err != nil {
 			log.Println(err)
@@ -230,7 +226,7 @@ func findID(data []byte) string {
 func (b *Baresip) Close() {
 	atomic.StoreUint32(&b.ctrlConnAlive, 0)
 	if b.ctrlConn != nil {
-		b.ctrlConn.Close()
+		_ = b.ctrlConn.Close()
 	}
 	close(b.responseChan)
 	close(b.eventChan)
@@ -254,8 +250,8 @@ func (b *Baresip) keepActive() {
 		if atomic.LoadUint32(&b.ctrlConnAlive) == 0 {
 			break
 		}
-		b.ctrlConn.SetWriteDeadline(time.Now().Add(2 * time.Second))
-		b.ctrlConn.Write(ping)
+		_ = b.ctrlConn.SetWriteDeadline(time.Now().Add(2 * time.Second))
+		_, _ = b.ctrlConn.Write(ping)
 	}
 }
 
@@ -335,7 +331,7 @@ func (b *Baresip) setup() error {
 	// FIXME: launch the "baresip" process with the correct arguments
 
 	if err := b.connectCtrl(); err != nil {
-		//b.end(1)
+		// b.end(1)
 		return err
 	}
 
@@ -344,8 +340,8 @@ func (b *Baresip) setup() error {
 
 // Run a baresip instance
 func (b *Baresip) Run() error {
-	//go b.read()
-	//err := b.end(C.mainLoop())
+	// go b.read()
+	// err := b.end(C.mainLoop())
 
 	cmd := exec.Command("baresip")
 
