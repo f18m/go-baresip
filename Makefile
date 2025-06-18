@@ -22,13 +22,9 @@ coverage:
 	@go tool cover -func=coverage.out
 	@go tool cover -html=coverage.out
 
-build:
+build-example:
 	@go mod download
-	CGO_ENABLED=0 GOOS=linux go build -mod=readonly -v -o bin/${APP_NAME}
-
-build-debug:
-	@go mod download
-	CGO_ENABLED=0 GOOS=linux go build -mod=readonly -v -gcflags="all=-N -l" -o bin/${APP_NAME}
+	CGO_ENABLED=0 GOOS=linux go build -mod=readonly -v -o bin/${APP_NAME} example/main.go
 
 clean: docker-clean
 	@echo Cleaning...

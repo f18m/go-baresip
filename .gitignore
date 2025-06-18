@@ -1,9 +1,2 @@
-accounts
-config
-contacts
-current_contact
-uuid
-libbaresip/git
-espeak/espeak-ng
-espeak/soxr-code
-example/example
+bin/
+

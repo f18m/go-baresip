@@ -1,18 +1,20 @@
 package gobaresip
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
-	"strings"
+	"os/exec"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/goccy/go-json"
+	"github.com/markdingo/netstring"
 )
 
 // ResponseMsg
@@ -52,8 +54,9 @@ type Baresip struct {
 	eventChan      chan EventMsg
 	responseWsChan chan []byte
 	eventWsChan    chan []byte
-	ctrlStream     *reader
-	autoCmd        ac
+	ctrlStream     *netstring.Decoder
+
+	autoCmd ac
 }
 
 type ac struct {
@@ -119,8 +122,7 @@ func (b *Baresip) connectCtrl() error {
 		atomic.StoreUint32(&b.ctrlConnAlive, 0)
 		return fmt.Errorf("%v: please make sure ctrl_tcp is enabled", err)
 	}
-
-	b.ctrlStream = newReader(b.ctrlConn)
+	b.ctrlStream = netstring.NewDecoder(b.ctrlConn)
 
 	atomic.StoreUint32(&b.ctrlConnAlive, 1)
 	return nil
@@ -132,81 +134,86 @@ func (b *Baresip) read() {
 			break
 		}
 
-		msg, err := b.ctrlStream.readNetstring()
+		//msg, err := b.ctrlStream.readNetstring()
+		k, v, err := b.ctrlStream.DecodeKeyed()
 		if err != nil {
 			log.Println(err)
 			break
 		}
 
-		if bytes.Contains(msg, []byte("\"event\":true")) {
-			if bytes.Contains(msg, []byte(",end of file")) {
-				msg = bytes.Replace(msg, []byte("AUDIO_ERROR"), []byte("AUDIO_EOF"), 1)
-			}
-
-			var e EventMsg
-			e.RawJSON = msg
-
-			err := json.Unmarshal(e.RawJSON, &e)
-			if err != nil {
-				log.Println(err, string(e.RawJSON))
-				continue
-			}
-
-			b.eventChan <- e
-			if b.wsAddr != "" {
-				select {
-				case b.eventWsChan <- e.RawJSON:
-				default:
+		_ = k // Key is not used, but we can use it for debugging
+		_ = v // Value is the netstring data
+		/*
+			if bytes.Contains(msg, []byte("\"event\":true")) {
+				if bytes.Contains(msg, []byte(",end of file")) {
+					msg = bytes.Replace(msg, []byte("AUDIO_ERROR"), []byte("AUDIO_EOF"), 1)
 				}
-			}
-		} else if bytes.Contains(msg, []byte("\"response\":true")) {
 
-			var r ResponseMsg
-			r.RawJSON = msg
+				var e EventMsg
+				e.RawJSON = msg
 
-			err := json.Unmarshal(r.RawJSON, &r)
-			if err != nil {
-				log.Println(err, string(r.RawJSON))
-				continue
-			}
+				err := json.Unmarshal(e.RawJSON, &e)
+				if err != nil {
+					log.Println(err, string(e.RawJSON))
+					continue
+				}
 
-			if strings.HasPrefix(r.Token, "cmd_dial") {
-				if d := atomic.LoadUint32(&b.autoCmd.hangupGap); d > 0 {
-					if id := findID([]byte(r.Data)); len(id) > 1 {
-						go func() {
-							time.Sleep(time.Duration(d) * time.Second)
-							b.CmdHangupID(id)
-						}()
+				b.eventChan <- e
+				if b.wsAddr != "" {
+					select {
+					case b.eventWsChan <- e.RawJSON:
+					default:
+					}
+				}
+			} else if bytes.Contains(msg, []byte("\"response\":true")) {
+
+				var r ResponseMsg
+				r.RawJSON = msg
+
+				err := json.Unmarshal(r.RawJSON, &r)
+				if err != nil {
+					log.Println(err, string(r.RawJSON))
+					continue
+				}
+
+				if strings.HasPrefix(r.Token, "cmd_dial") {
+					if d := atomic.LoadUint32(&b.autoCmd.hangupGap); d > 0 {
+						if id := findID([]byte(r.Data)); len(id) > 1 {
+							go func() {
+								time.Sleep(time.Duration(d) * time.Second)
+								b.CmdHangupID(id)
+							}()
+						}
+					}
+				}
+
+				if strings.HasPrefix(r.Token, "cmd_auto") {
+					r.Ok = true
+					b.autoCmd.mux.RLock()
+					r.Data = fmt.Sprintf("dial%v;hangupgap=%d",
+						b.autoCmd.num,
+						atomic.LoadUint32(&b.autoCmd.hangupGap),
+					)
+					b.autoCmd.mux.RUnlock()
+					r.Data = strings.Replace(r.Data, " ", ",", -1)
+					r.Data = strings.Replace(r.Data, ":", ";autodialgap=", -1)
+					rj, err := json.Marshal(r)
+					if err != nil {
+						log.Println(err, r.Data)
+						continue
+					}
+					r.RawJSON = rj
+				}
+
+				b.responseChan <- r
+				if b.wsAddr != "" {
+					select {
+					case b.responseWsChan <- r.RawJSON:
+					default:
 					}
 				}
 			}
-
-			if strings.HasPrefix(r.Token, "cmd_auto") {
-				r.Ok = true
-				b.autoCmd.mux.RLock()
-				r.Data = fmt.Sprintf("dial%v;hangupgap=%d",
-					b.autoCmd.num,
-					atomic.LoadUint32(&b.autoCmd.hangupGap),
-				)
-				b.autoCmd.mux.RUnlock()
-				r.Data = strings.Replace(r.Data, " ", ",", -1)
-				r.Data = strings.Replace(r.Data, ":", ";autodialgap=", -1)
-				rj, err := json.Marshal(r)
-				if err != nil {
-					log.Println(err, r.Data)
-					continue
-				}
-				r.RawJSON = rj
-			}
-
-			b.responseChan <- r
-			if b.wsAddr != "" {
-				select {
-				case b.responseWsChan <- r.RawJSON:
-				default:
-				}
-			}
-		}
+		*/
 	}
 }
 
@@ -335,17 +342,51 @@ func (b *Baresip) setup() error {
 	return nil
 }
 
-/*
 // Run a baresip instance
 func (b *Baresip) Run() error {
-	go b.read()
-	err := b.end(C.mainLoop())
-	if err.Error() == "0" {
-		return nil
+	//go b.read()
+	//err := b.end(C.mainLoop())
+
+	cmd := exec.Command("baresip")
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		log.Fatalf("Error creating stdout pipe: %v", err)
 	}
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		log.Fatalf("Error creating stderr pipe: %v", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		log.Fatalf("Error starting baresip: %v", err)
+	}
+
+	go readOutput("stdout", stdout)
+	go readOutput("stderr", stderr)
+
+	if err := cmd.Wait(); err != nil {
+		log.Printf("Baresip exited with error: %v", err)
+	} else {
+		log.Println("Baresip exited normally.")
+	}
+
 	return err
 }
 
+func readOutput(name string, reader io.ReadCloser) {
+	scanner := bufio.NewScanner(reader)
+	for scanner.Scan() {
+		fmt.Printf("%s: %s\n", name, scanner.Text())
+	}
+
+	if err := scanner.Err(); err != nil {
+		log.Printf("Error reading from %s: %v", name, err)
+	}
+}
+
+/*
 func (b *Baresip) end(err C.int) error {
 	if err != 0 {
 		C.ua_stop_all(1)
