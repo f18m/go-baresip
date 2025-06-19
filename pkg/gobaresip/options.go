@@ -68,11 +68,29 @@ func SetLogger(lgr Logger) func(*Baresip) error {
 	}
 }
 
+// SetLogger sets the logger for Baresip.
+func SetLogBaresipStdoutAndStderr(logStdout bool, logStderr bool) func(*Baresip) error {
+	return func(b *Baresip) error {
+		b.logStdout = logStdout
+		b.logStderr = logStderr
+		return nil
+	}
+}
+
 // SetPingInterval sets the ping interval used as "keep alive" between the baresip C server and the
 // Baresip Go client. If set to -1, no ping will be sent.
 func SetPingInterval(i time.Duration) func(*Baresip) error {
 	return func(b *Baresip) error {
 		b.pingInterval = i
+		return nil
+	}
+}
+
+// SetCmdWriteTimeout sets the timeout for writing commands on the TCP socket to the baresip C server.
+// Since commands are typically very short (few bytes), the default timeout is small (100ms).
+func SetCmdWriteTimeout(i time.Duration) func(*Baresip) error {
+	return func(b *Baresip) error {
+		b.ctrlCmdWriteTimeout = i
 		return nil
 	}
 }

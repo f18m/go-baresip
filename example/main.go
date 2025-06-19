@@ -24,6 +24,7 @@ func main() {
 		// gobaresip.SetWsAddr("0.0.0.0:8080"),
 		gobaresip.SetDebug(true),
 		gobaresip.SetLogger(loggerAdapter),
+		gobaresip.SetLogBaresipStdoutAndStderr(true, true),
 	)
 	if err != nil {
 		loggerAdapter.Fatal(err)

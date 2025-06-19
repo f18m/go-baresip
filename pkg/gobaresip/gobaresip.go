@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"os"
 	"os/exec"
@@ -87,10 +86,21 @@ type Baresip struct {
 	// Debug mode. If true, it enables debug logging by baresip.
 	debug bool
 
+	// logStdout and logStderr control whether to log baresip's stdout and stderr.
+	// If true, the stdout/stderr of baresip will be logged to the logger set via the SetLogger()
+	// option passed to New().
+	// If false, the stdout/stderr will not be logged but will still be available via
+	// GetStdoutPipe() and GetStderrPipe() methods.
+	logStdout bool
+	logStderr bool
+
 	// OTHER CONFIGS
 
 	// pingInterval is the interval for sending ping commands to baresip.
 	pingInterval time.Duration
+
+	// Timeout for writing commands to the control interface.
+	ctrlCmdWriteTimeout time.Duration
 
 	// TCP socket address for the control interface.
 	ctrlAddr string
@@ -106,6 +116,8 @@ type Baresip struct {
 	baresipCmd    *exec.Cmd
 	baresipCtx    context.Context
 	baresipCancel context.CancelFunc
+	baresipStdout io.ReadCloser
+	baresipStderr io.ReadCloser
 
 	// ctrlConn is the TCP connection to the baresip control interface.
 	ctrlConn        net.Conn
@@ -123,11 +135,13 @@ type Baresip struct {
 
 	// Channel of events (spontaneously sent by baresip) coming from baresip TCP socket
 	eventChan chan EventMsg
+	/*
+		// WebSocket channels for responses and events (if WebSocket support is enabled)
+		responseWsChan chan []byte
+		eventWsChan    chan []byte
+	*/
 
-	// WebSocket channels for responses and events (if WebSocket support is enabled)
-	responseWsChan chan []byte
-	eventWsChan    chan []byte
-
+	// ???
 	autoCmd ac
 }
 
@@ -166,6 +180,9 @@ func New(options ...func(*Baresip) error) (*Baresip, error) {
 	}
 	if b.pingInterval == 0 {
 		b.pingInterval = 30 * time.Second // Default ping interval
+	}
+	if b.ctrlCmdWriteTimeout == 0 {
+		b.ctrlCmdWriteTimeout = 100 * time.Millisecond // Default write timeout for control commands
 	}
 
 	b.autoCmd.num = make(map[string]int)
@@ -359,13 +376,14 @@ func (b *Baresip) Start() (context.CancelFunc, error) {
 	b.logger.Infof("Starting baresip with args: %v", args)
 	b.baresipCmd = exec.CommandContext(b.baresipCtx, "baresip", args...) //nolint:gosec
 
-	// Open stdout/stderr pipes BEFORE starting the command
-	stdout, err := b.baresipCmd.StdoutPipe()
+	// Open stdout/stderr pipes BEFORE starting the command (this can't be done AFTER!)
+	var err error
+	b.baresipStdout, err = b.baresipCmd.StdoutPipe()
 	if err != nil {
 		b.baresipCancel()
 		return func() {}, fmt.Errorf("error getting baresip stdout pipe: %w", err)
 	}
-	stderr, err := b.baresipCmd.StderrPipe()
+	b.baresipStderr, err = b.baresipCmd.StderrPipe()
 	if err != nil {
 		b.baresipCancel()
 		return func() {}, fmt.Errorf("error getting baresip stderr pipe: %w", err)
@@ -377,9 +395,12 @@ func (b *Baresip) Start() (context.CancelFunc, error) {
 		return func() {}, fmt.Errorf("error starting baresip: %w", err)
 	}
 
-	// FIXME: these are for debugging purposes, remove in production
-	go readOutput("stdout", stdout)
-	go readOutput("stderr", stderr)
+	if b.logStdout {
+		go b.readOutput("stdout", b.baresipStdout)
+	}
+	if b.logStderr {
+		go b.readOutput("stderr", b.baresipStderr)
+	}
 
 	// FIXME: implement wait loop with small timeout, to account for baresip startup time
 	time.Sleep(500 * time.Millisecond) // Give baresip some time to start
@@ -430,21 +451,24 @@ func (b *Baresip) WaitForShutdown() error {
 	return nil
 }
 
-func (b *Baresip) GetStdoutPipe() (io.ReadCloser, error) {
-	return b.baresipCmd.StdoutPipe()
+func (b *Baresip) GetStdoutPipe() io.ReadCloser {
+	return b.baresipStdout
 }
 
-func (b *Baresip) GetStderrPipe() (io.ReadCloser, error) {
-	return b.baresipCmd.StderrPipe()
+func (b *Baresip) GetStderrPipe() io.ReadCloser {
+	return b.baresipStderr
 }
 
-func readOutput(name string, reader io.ReadCloser) {
+func (b *Baresip) readOutput(name string, reader io.ReadCloser) {
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
-		fmt.Printf("%s: %s\n", name, scanner.Text())
+		b.logger.Infof("baresip %s: %s", name, scanner.Text())
 	}
 
 	if err := scanner.Err(); err != nil {
-		log.Printf("Error reading from %s: %v", name, err)
+		// log.Printf("Error reading from %s: %v", name, err)
+		// FIXME: this might happen because the baresip command has been terminated or for something else;
+		//         ideally we should have a way to report this to Baresip user (channel?)
+		return
 	}
 }

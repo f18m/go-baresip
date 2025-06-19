@@ -95,8 +95,7 @@ func (b *Baresip) Cmd(command, params, token string) error {
 
 	success := false
 	b.ctrlConnTxMutex.Lock()
-	// FIXME: make write deadline configurable
-	err = b.ctrlConn.SetWriteDeadline(time.Now().Add(2 * time.Second))
+	err = b.ctrlConn.SetWriteDeadline(time.Now().Add(b.ctrlCmdWriteTimeout))
 	if err == nil {
 		err = b.ctrlConnEnc.EncodeString(netstring.NoKey, string(msg))
 		if err == nil {
