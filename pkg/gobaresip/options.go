@@ -69,7 +69,7 @@ func SetLogger(lgr Logger) func(*Baresip) error {
 }
 
 // SetLogger sets the logger for Baresip.
-func SetLogBaresipStdoutAndStderr(logStdout bool, logStderr bool) func(*Baresip) error {
+func SetLogBaresipStdoutAndStderr(logStdout, logStderr bool) func(*Baresip) error {
 	return func(b *Baresip) error {
 		b.logStdout = logStdout
 		b.logStderr = logStderr

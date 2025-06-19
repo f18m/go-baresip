@@ -1,3 +1,7 @@
+![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/f18m/go-baresip/main.yaml)
+
+[![Go Reference](https://pkg.go.dev/badge/github.com/f18m/go-baresip.svg)](https://pkg.go.dev/github.com/f18m/go-baresip)
+
 # go-baresip
 
 This repository provides a tiny wrapper around [baresip](https://github.com/baresip/baresip)
