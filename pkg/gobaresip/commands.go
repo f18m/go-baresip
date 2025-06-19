@@ -145,14 +145,14 @@ func (b *Baresip) CmdCallstat() error {
 	return b.Cmd(c, "", "cmd_"+c)
 }
 
-// CmdContact_next will set next contact
-func (b *Baresip) CmdContact_next() error {
+// CmdContactNext will set next contact
+func (b *Baresip) CmdContactNext() error {
 	c := "contact_next"
 	return b.Cmd(c, "", "cmd_"+c)
 }
 
-// CmdContact_prev will set previous contact
-func (b *Baresip) CmdContact_prev() error {
+// CmdContactPrev will set previous contact
+func (b *Baresip) CmdContactPrev() error {
 	c := "contact_prev"
 	return b.Cmd(c, "", "cmd_"+c)
 }

@@ -2,9 +2,9 @@ package gobaresip
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -12,13 +12,14 @@ import (
 	"os/exec"
 	"path"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/markdingo/netstring"
 )
 
-// internal_ping_token is a special token used for internal pings. Never use it in your code.
-const internal_ping_token = "gobaresip_internal_ping"
+// internalPingToken is a special token used for internal pings. Never use it in your code.
+const internalPingToken = "gobaresip_internal_ping"
 
 // ResponseMsg represents a response message from the baresip control interface.
 // See doxygen docs at https://github.com/baresip/baresip/blob/main/modules/ctrl_tcp/ctrl_tcp.c
@@ -47,7 +48,7 @@ type EventMsg struct {
 }
 
 // Logger is an interface that wraps the basic logging methods
-// and can be used to bridge Baresip with a real logger implementation
+// and can be used to bridge [Baresip] with a real logger implementation
 // (e.g., logrus, zap, etc.).
 type Logger interface {
 	Debug(args ...interface{})
@@ -56,7 +57,7 @@ type Logger interface {
 	Infof(template string, args ...interface{})
 }
 
-// nopLogger is a no-op implementation of Logger (does nothing)
+// nopLogger is a no-op implementation of [Logger] (does nothing)
 type nopLogger struct{}
 
 func (n *nopLogger) Debug(_ ...interface{})            {}
@@ -64,7 +65,7 @@ func (n *nopLogger) Debugf(_ string, _ ...interface{}) {}
 func (n *nopLogger) Info(_ ...interface{})             {}
 func (n *nopLogger) Infof(_ string, _ ...interface{})  {}
 
-// BareSipClientStats holds statistics about the baresip client.
+// BareSipClientStats holds statistics about a [Baresip] instance.
 type BareSipClientStats struct {
 	TxStats struct {
 		SuccessfulCmds  uint32 `json:"successful_cmds"`
@@ -93,10 +94,10 @@ type Baresip struct {
 	debug bool
 
 	// logStdout and logStderr control whether to log baresip's stdout and stderr.
-	// If true, the stdout/stderr of baresip will be logged to the logger set via the SetLogger()
-	// option passed to New().
+	// If true, the stdout/stderr of baresip will be logged to the logger set via the [SetLogger]
+	// option passed to [New].
 	// If false, the stdout/stderr will not be logged but will still be available via
-	// GetStdoutPipe() and GetStderrPipe() methods.
+	// [GetStdoutPipe] and [GetStderrPipe] methods.
 	logStdout bool
 	logStderr bool
 
@@ -138,18 +139,11 @@ type Baresip struct {
 
 	// Channel of events (spontaneously sent by baresip) coming from baresip TCP socket
 	eventChan chan EventMsg
-
-	// ???
-	autoCmd ac
 }
 
-type ac struct {
-	mux sync.RWMutex
-	num map[string]int
-
-	hangupGap uint32
-}
-
+// New creates a new [Baresip] instance with the provided options.
+// Options can be set using functional options like [SetAudioPath], [SetBaresipDebug],
+// [SetLogger], etc. If no options are provided, it will use default values.
 func New(options ...func(*Baresip) error) (*Baresip, error) {
 	b := &Baresip{
 		responseChan: make(chan ResponseMsg, 100),
@@ -182,8 +176,6 @@ func New(options ...func(*Baresip) error) (*Baresip, error) {
 	if b.ctrlCmdWriteTimeout == 0 {
 		b.ctrlCmdWriteTimeout = 100 * time.Millisecond // Default write timeout for control commands
 	}
-
-	b.autoCmd.num = make(map[string]int)
 
 	// FIXME:
 	// Need to read the config file and check for
@@ -222,11 +214,12 @@ func (b *Baresip) readFromCtrlConn() {
 				// If both unmarshalling attempts fail, log the error and skip the message
 				b.ctrlStats.RxStats.DecodeFailures++
 				continue
-			} else {
-				// isResponse = true
-				response.RawJSON = netstr
-				b.onCtrlConnResponse(response)
 			}
+
+			// isResponse = true
+			response.RawJSON = netstr
+			b.onCtrlConnResponse(response)
+
 		} else {
 			// isEvent = true
 			event.RawJSON = netstr
@@ -244,39 +237,7 @@ func (b *Baresip) onCtrlConnEvent(event EventMsg) {
 }
 
 func (b *Baresip) onCtrlConnResponse(response ResponseMsg) {
-	/*
-		if strings.HasPrefix(r.Token, "cmd_dial") {
-			if d := atomic.LoadUint32(&b.autoCmd.hangupGap); d > 0 {
-				if id := findID([]byte(r.Data)); len(id) > 1 {
-					go func() {
-						time.Sleep(time.Duration(d) * time.Second)
-						b.CmdHangupID(id)
-					}()
-				}
-			}
-		}
-
-		if strings.HasPrefix(r.Token, "cmd_auto") {
-			r.Ok = true
-			b.autoCmd.mux.RLock()
-			r.Data = fmt.Sprintf("dial%v;hangupgap=%d",
-				b.autoCmd.num,
-				atomic.LoadUint32(&b.autoCmd.hangupGap),
-			)
-			b.autoCmd.mux.RUnlock()
-			r.Data = strings.Replace(r.Data, " ", ",", -1)
-			r.Data = strings.Replace(r.Data, ":", ";autodialgap=", -1)
-			rj, err := json.Marshal(r)
-			if err != nil {
-				log.Println(err, r.Data)
-				continue
-			}
-
-			r.RawJSON = rj
-		}
-	*/
-
-	if response.Token == internal_ping_token {
+	if response.Token == internalPingToken {
 		// This is an internal ping response, hide that from the user (don't send on the response channel)
 		b.ctrlStats.TxStats.SuccessfulPings++
 		b.logger.Infof("Ping successful, successful pings: %d", b.ctrlStats.TxStats.SuccessfulPings)
@@ -288,22 +249,12 @@ func (b *Baresip) onCtrlConnResponse(response ResponseMsg) {
 	}
 }
 
-func findID(data []byte) string {
-	if posA := bytes.Index(data, []byte("call id: ")); posA > 0 {
-		if posB := bytes.Index(data[posA:], []byte("\n")); posB > 0 {
-			l := len("call id: ")
-			return string(data[posA+l : posA+posB])
-		}
-	}
-	return ""
-}
-
-// GetEventChan returns the receive-only EventMsg channel for reading data.
+// GetEventChan returns the receive-only [EventMsg] channel for reading data.
 func (b *Baresip) GetEventChan() <-chan EventMsg {
 	return b.eventChan
 }
 
-// GetResponseChan returns the receive-only ResponseMsg channel for reading data.
+// GetResponseChan returns the receive-only [ResponseMsg] channel for reading data.
 func (b *Baresip) GetResponseChan() <-chan ResponseMsg {
 	return b.responseChan
 }
@@ -324,7 +275,7 @@ func (b *Baresip) keepActive() {
 			return
 
 		case <-ticker.C:
-			if b.Cmd("uuid", "", internal_ping_token) != nil {
+			if b.Cmd("uuid", "", internalPingToken) != nil {
 				// FIXME: shall we terminate the connection on a failed ping?
 				b.ctrlStats.TxStats.FailedPings++
 				b.logger.Infof("Ping failed, failed pings: %d", b.ctrlStats.TxStats.FailedPings)
@@ -333,7 +284,10 @@ func (b *Baresip) keepActive() {
 	}
 }
 
-// Run a baresip instance
+// Start a baresip instance, by executing in background a baresip instance and then
+// connecting to its control TCP socket.
+// It returns a context.CancelFunc that can be used to stop the baresip instance.
+// If an error occurs, it returns an error instead.
 func (b *Baresip) Start() (context.CancelFunc, error) {
 	b.baresipCtx, b.baresipCancel = context.WithCancel(context.Background())
 
@@ -374,8 +328,7 @@ func (b *Baresip) Start() (context.CancelFunc, error) {
 		go b.readOutput("stderr", b.baresipStderr)
 	}
 
-	// FIXME: implement wait loop with small timeout, to account for baresip startup time
-	time.Sleep(500 * time.Millisecond) // Give baresip some time to start
+	// Connect to the control TCP socket
 	if err := b.connectCtrl(); err != nil {
 		b.baresipCancel()
 		return func() {}, err
@@ -392,9 +345,28 @@ func (b *Baresip) Start() (context.CancelFunc, error) {
 
 func (b *Baresip) connectCtrl() error {
 	var err error
-	b.ctrlConn, err = net.Dial("tcp", b.ctrlAddr)
-	if err != nil {
-		return fmt.Errorf("failed to connect to ctrl socket: please make sure ctrl_tcp baresip module is enabled: %w", err)
+
+	attempts := 0
+	for {
+		b.ctrlConn, err = net.Dial("tcp", b.ctrlAddr)
+		switch {
+		case errors.Is(err, syscall.ECONNREFUSED):
+			attempts++
+			if attempts < 10 {
+				time.Sleep(100 * time.Millisecond) // Give baresip some time to start
+			} else {
+				// give up... too many attempts
+				return err
+			}
+
+		case err != nil:
+			// Some other error occurred, return it
+			return fmt.Errorf("failed to connect to ctrl socket: please make sure ctrl_tcp baresip module is enabled: %w", err)
+		}
+
+		if err == nil {
+			break // Successfully connected to the control socket
+		}
 	}
 
 	// link the TCP socket to the netstring decoder/encoder
@@ -403,6 +375,8 @@ func (b *Baresip) connectCtrl() error {
 	return nil
 }
 
+// WaitForShutdown has to be called after the [context.CancelFunc] returned by [Start] has been invoked.
+// It will wait for the baresip external process to terminate and close all other resources associated with it.
 func (b *Baresip) WaitForShutdown() error {
 	if b.baresipCtx.Err() == nil {
 		// this is a logical programming error...
@@ -428,10 +402,16 @@ func (b *Baresip) WaitForShutdown() error {
 	return nil
 }
 
+// GetStdoutPipe returns the stdout pipe of the baresip process.
+// This can be used to read the stdout output of the baresip process directly.
+// If logging is enabled via [SetOption] with [SetBaresipDebug] or
+// [SetLogStdout], the output will also be logged to the logger set via [SetLogger].
 func (b *Baresip) GetStdoutPipe() io.ReadCloser {
 	return b.baresipStdout
 }
 
+// GetStderrPipe returns the stderr pipe of the baresip process.
+// See [GetStdoutPipe] for more details.
 func (b *Baresip) GetStderrPipe() io.ReadCloser {
 	return b.baresipStderr
 }

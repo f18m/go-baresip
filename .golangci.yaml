@@ -85,7 +85,7 @@ linters:
     - reassign
 
     # Drop-in replacement of `golint`.
-    #- revive
+    - revive
 
     # Somewhat similar to `bodyclose` but for `database/sql` package.
     - rowserrcheck
@@ -106,7 +106,7 @@ linters:
     - unparam
 
     # Must have. Finds unused declarations.
-    #- unused
+    - unused
 
     # Detect the possibility to use variables/constants from stdlib.
     - usestdlibvars
@@ -114,8 +114,6 @@ linters:
     # Finds wasted assignment statements.
     - wastedassign
 
-  disable:
-    - unused # FIXME temporary
   settings:
     wsl:
       allow-trailing-comment: true

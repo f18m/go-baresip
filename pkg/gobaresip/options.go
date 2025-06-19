@@ -60,7 +60,8 @@ func SetLogger(lgr Logger) func(*Baresip) error {
 	}
 }
 
-// SetLogger sets the logger for Baresip.
+// SetLogBaresipStdoutAndStderr defines whether the Baresip type should capture & log the stdout and stderr
+// output of the baresip process, using the logger provided in [SetLogger].
 func SetLogBaresipStdoutAndStderr(logStdout, logStderr bool) func(*Baresip) error {
 	return func(b *Baresip) error {
 		b.logStdout = logStdout

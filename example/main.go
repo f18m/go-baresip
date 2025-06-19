@@ -1,3 +1,4 @@
+// Package  main contains a simple app showing how to use the gobaresip module.
 package main
 
 import (
@@ -28,6 +29,7 @@ func main() {
 		gobaresip.SetBaresipDebug(true),
 		gobaresip.SetLogger(loggerAdapter),
 		gobaresip.SetLogBaresipStdoutAndStderr(true, true),
+		gobaresip.SetPingInterval(6*time.Second),
 	)
 	if err != nil {
 		loggerAdapter.Fatal(err)
