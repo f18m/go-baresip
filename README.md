@@ -1,5 +1,4 @@
 ![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/f18m/go-baresip/main.yaml)
-
 [![Go Reference](https://pkg.go.dev/badge/github.com/f18m/go-baresip.svg)](https://pkg.go.dev/github.com/f18m/go-baresip)
 
 # go-baresip
@@ -31,17 +30,24 @@ config:
 flowchart TD
       CLIENT("Actual client")
       subgraph docker [Docker container]
-      BARESIP("baresip")
+      BARESIP("baresip VOIP client")
       DEPENDENCIES(["Baresip dependencies:<br>audio codecs, modules, etc"])
       GOLANGAPP("Your golang app<br>(using go-baresip)")
 
       BARESIP --Uses--> DEPENDENCIES
       GOLANGAPP --TCP socket--> BARESIP
       end
-      CLIENT --YourInterface--> GOLANGAPP
+      CLIENT --Your Interface (TCP, HTTP, WebSocket, etc)--> GOLANGAPP
 ```
 
 Of course the `Actual client` and the `golang app` are up to you to design to fit your needs.
+
+Please check the [example](./example/main.go) as a starting point.
+
+
+## Golang Reference docs
+
+Please check [go-baresip reference docs]((https://pkg.go.dev/github.com/f18m/go-baresip) page.
 
 
 ## Original project

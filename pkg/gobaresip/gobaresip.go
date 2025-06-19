@@ -259,6 +259,8 @@ func (b *Baresip) readFromCtrlConn() {
 			b.onCtrlConnEvent(event)
 		}
 	}
+
+	b.logger.Infof("go-baresip goroutine stopped reading TCP socket")
 }
 
 func (b *Baresip) onCtrlConnEvent(event EventMsg) {
@@ -356,6 +358,7 @@ func (b *Baresip) keepActive() {
 	for {
 		select {
 		case <-b.baresipCtx.Done():
+			b.logger.Infof("go-baresip goroutine stopped sending TCP keep-alives/pings")
 			return
 
 		case <-ticker.C:
@@ -372,7 +375,9 @@ func (b *Baresip) keepActive() {
 func (b *Baresip) Start() (context.CancelFunc, error) {
 	b.baresipCtx, b.baresipCancel = context.WithCancel(context.Background())
 
-	args := []string{"-f", b.configPath, "-p", b.audioPath, "-a", b.userAgent}
+	// -c disables colored logs, which don't play well with our logic to redirect stdout/stderr to
+	// the application's logger
+	args := []string{"-f", b.configPath, "-p", b.audioPath, "-a", b.userAgent, "-c"}
 	if b.debug {
 		args = append(args, "-v")
 	}
@@ -437,6 +442,12 @@ func (b *Baresip) connectCtrl() error {
 }
 
 func (b *Baresip) WaitForShutdown() error {
+
+	if b.baresipCtx.Err() == nil {
+		// this is a logical programming error...
+		return fmt.Errorf("Baresip is still running, please cancel its context provided by Start() before calling WaitForShutdown()")
+	}
+
 	// Wait for the baresip command to finish
 	if b.baresipCmd != nil {
 		if err := b.baresipCmd.Wait(); err != nil {
@@ -471,9 +482,11 @@ func (b *Baresip) readOutput(name string, reader io.ReadCloser) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		// log.Printf("Error reading from %s: %v", name, err)
 		// FIXME: this might happen because the baresip command has been terminated or for something else;
 		//         ideally we should have a way to report this to Baresip user (channel?)
+		b.logger.Infof("go-baresip goroutine stopped reading %s due to error: %s", name, err)
 		return
 	}
+
+	b.logger.Infof("go-baresip goroutine stopped reading %s", name)
 }
