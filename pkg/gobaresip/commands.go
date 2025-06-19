@@ -106,9 +106,9 @@ func (b *Baresip) Cmd(command, params, token string) error {
 	b.ctrlConnTxMutex.Unlock()
 
 	if success {
-		b.successfulCmds++
+		b.ctrlStats.TxStats.SuccessfulCmds++
 	} else {
-		b.failedCmds++
+		b.ctrlStats.TxStats.FailedCmds++
 	}
 
 	return err

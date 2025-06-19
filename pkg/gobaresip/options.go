@@ -1,5 +1,7 @@
 package gobaresip
 
+import "time"
+
 // SetOption takes one or more option function and applies them in order to Baresip.
 func (b *Baresip) SetOption(options ...func(*Baresip) error) error {
 	for _, opt := range options {
@@ -62,6 +64,15 @@ func SetUserAgent(opt string) func(*Baresip) error {
 func SetLogger(lgr Logger) func(*Baresip) error {
 	return func(b *Baresip) error {
 		b.logger = lgr
+		return nil
+	}
+}
+
+// SetPingInterval sets the ping interval used as "keep alive" between the baresip C server and the
+// Baresip Go client. If set to -1, no ping will be sent.
+func SetPingInterval(i time.Duration) func(*Baresip) error {
+	return func(b *Baresip) error {
+		b.pingInterval = i
 		return nil
 	}
 }

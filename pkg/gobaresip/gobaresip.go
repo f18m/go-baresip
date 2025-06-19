@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -16,6 +17,8 @@ import (
 
 	"github.com/markdingo/netstring"
 )
+
+const internal_ping_token = "gobaresip_internal_ping"
 
 // ResponseMsg
 type ResponseMsg struct {
@@ -57,6 +60,20 @@ func (n *nopLogger) Debugf(_ string, _ ...interface{}) {}
 func (n *nopLogger) Info(_ ...interface{})             {}
 func (n *nopLogger) Infof(_ string, _ ...interface{})  {}
 
+type BareSipClientStats struct {
+	TxStats struct {
+		SuccessfulCmds  uint32 `json:"successful_cmds"`
+		FailedCmds      uint32 `json:"failed_cmds"`
+		SuccessfulPings uint32 `json:"successful_pings"`
+		FailedPings     uint32 `json:"failed_pings"`
+	}
+	RxStats struct {
+		DecodeFailures uint32 `json:"decode_failures"`
+		EventMsgs      uint32 `json:"event_msg_count"`
+		ResponseMsgs   uint32 `json:"response_msg_count"`
+	}
+}
+
 // Baresip is the main struct for managing a baresip instance.
 type Baresip struct {
 	// OPTIONS AT BARESIP STARTUP
@@ -71,6 +88,9 @@ type Baresip struct {
 	debug bool
 
 	// OTHER CONFIGS
+
+	// pingInterval is the interval for sending ping commands to baresip.
+	pingInterval time.Duration
 
 	// TCP socket address for the control interface.
 	ctrlAddr string
@@ -96,10 +116,7 @@ type Baresip struct {
 	ctrlConnEnc *netstring.Encoder
 
 	// stats
-	successfulCmds  uint32 // Number of successful commands sent to the baresip control interface
-	failedCmds      uint32 // Number of failed commands sent to the baresip control interface
-	successfulPings uint32 // Number of successful pings to the baresip control interface
-	failedPings     uint32 // Number of failed pings to the baresip control interface
+	ctrlStats BareSipClientStats
 
 	// Channel of responses (to commands) coming from baresip TCP socket
 	responseChan chan ResponseMsg
@@ -120,10 +137,6 @@ type ac struct {
 
 	hangupGap uint32
 }
-
-// ping is a netstring-encoded message that is a "special" command having just the "token"
-// and no "command" and "param" fields; compare with CommandMsg.
-var ping = []byte(`16:{"token":"ping"},`)
 
 func New(options ...func(*Baresip) error) (*Baresip, error) {
 	b := &Baresip{
@@ -151,6 +164,9 @@ func New(options ...func(*Baresip) error) (*Baresip, error) {
 	if b.logger == nil {
 		b.logger = &nopLogger{} // Use a no-op logger if none is provided
 	}
+	if b.pingInterval == 0 {
+		b.pingInterval = 30 * time.Second // Default ping interval
+	}
 
 	b.autoCmd.num = make(map[string]int)
 
@@ -177,7 +193,7 @@ func New(options ...func(*Baresip) error) (*Baresip, error) {
 	return b, nil
 }
 
-func (b *Baresip) read() {
+func (b *Baresip) readFromCtrlConn() {
 	for {
 
 		netstr, err := b.ctrlConnDec.Decode()
@@ -187,79 +203,102 @@ func (b *Baresip) read() {
 			break
 		}
 
-		fmt.Printf("Received: %s\n", netstr)
-		/*
-			if bytes.Contains(msg, []byte("\"event\":true")) {
-				if bytes.Contains(msg, []byte(",end of file")) {
-					msg = bytes.Replace(msg, []byte("AUDIO_ERROR"), []byte("AUDIO_EOF"), 1)
-				}
+		// TODO:
+		// use json.Unmarshal() with Decoder.DisallowUnknownFields() to ensure strict JSON parsing
+		// try to https://pkg.go.dev/encoding/json#Decoder.DisallowUnknownFields
 
-				var e EventMsg
-				e.RawJSON = msg
+		// What we received might be only 2 types of messages:
+		// 1. EventMsg
+		// 2. ResponseMsg
+		// We will try to unmarshal it as EventMsg first, and if that fails, we will try ResponseMsg.
+		// If both fail, we will skip the message.
+		var event EventMsg
+		var response ResponseMsg
+		// var isEvent, isResponse bool
 
-				err := json.Unmarshal(e.RawJSON, &e)
-				if err != nil {
-					log.Println(err, string(e.RawJSON))
-					continue
-				}
+		// Try unmarshalling first as EventMsg:
+		err = json.Unmarshal(netstr, &event)
+		if err != nil || !event.Event {
 
-				b.eventChan <- e
-				if b.wsAddr != "" {
-					select {
-					case b.eventWsChan <- e.RawJSON:
-					default:
-					}
-				}
-			} else if bytes.Contains(msg, []byte("\"response\":true")) {
+			// If unmarshalling as EventMsg fails, try unmarshalling as ResponseMsg
+			err = json.Unmarshal(netstr, &response)
+			if err != nil || !response.Response {
+				// If both unmarshalling attempts fail, log the error and skip the message
+				b.ctrlStats.RxStats.DecodeFailures++
+				continue
+			} else {
+				// isResponse = true
+				response.RawJSON = netstr
+				b.onCtrlConnResponse(response)
+			}
+		} else {
+			// isEvent = true
+			event.RawJSON = netstr
+			b.onCtrlConnEvent(event)
+		}
+	}
+}
 
-				var r ResponseMsg
-				r.RawJSON = msg
+func (b *Baresip) onCtrlConnEvent(event EventMsg) {
+	b.ctrlStats.RxStats.EventMsgs++
+	b.logger.Infof("Event: %s", string(event.RawJSON))
+	b.eventChan <- event
+	/*
+		if b.wsAddr != "" {
+			select {
+			case b.eventWsChan <- e.RawJSON:
+			default:
+			}
+		}*/
+}
 
-				err := json.Unmarshal(r.RawJSON, &r)
-				if err != nil {
-					log.Println(err, string(r.RawJSON))
-					continue
-				}
-
-				if strings.HasPrefix(r.Token, "cmd_dial") {
-					if d := atomic.LoadUint32(&b.autoCmd.hangupGap); d > 0 {
-						if id := findID([]byte(r.Data)); len(id) > 1 {
-							go func() {
-								time.Sleep(time.Duration(d) * time.Second)
-								b.CmdHangupID(id)
-							}()
-						}
-					}
-				}
-
-				if strings.HasPrefix(r.Token, "cmd_auto") {
-					r.Ok = true
-					b.autoCmd.mux.RLock()
-					r.Data = fmt.Sprintf("dial%v;hangupgap=%d",
-						b.autoCmd.num,
-						atomic.LoadUint32(&b.autoCmd.hangupGap),
-					)
-					b.autoCmd.mux.RUnlock()
-					r.Data = strings.Replace(r.Data, " ", ",", -1)
-					r.Data = strings.Replace(r.Data, ":", ";autodialgap=", -1)
-					rj, err := json.Marshal(r)
-					if err != nil {
-						log.Println(err, r.Data)
-						continue
-					}
-
-					r.RawJSON = rj
-				}
-
-				b.responseChan <- r
-				if b.wsAddr != "" {
-					select {
-					case b.responseWsChan <- r.RawJSON:
-					default:
-					}
+func (b *Baresip) onCtrlConnResponse(response ResponseMsg) {
+	/*
+		if strings.HasPrefix(r.Token, "cmd_dial") {
+			if d := atomic.LoadUint32(&b.autoCmd.hangupGap); d > 0 {
+				if id := findID([]byte(r.Data)); len(id) > 1 {
+					go func() {
+						time.Sleep(time.Duration(d) * time.Second)
+						b.CmdHangupID(id)
+					}()
 				}
 			}
-		*/
+		}
+
+		if strings.HasPrefix(r.Token, "cmd_auto") {
+			r.Ok = true
+			b.autoCmd.mux.RLock()
+			r.Data = fmt.Sprintf("dial%v;hangupgap=%d",
+				b.autoCmd.num,
+				atomic.LoadUint32(&b.autoCmd.hangupGap),
+			)
+			b.autoCmd.mux.RUnlock()
+			r.Data = strings.Replace(r.Data, " ", ",", -1)
+			r.Data = strings.Replace(r.Data, ":", ";autodialgap=", -1)
+			rj, err := json.Marshal(r)
+			if err != nil {
+				log.Println(err, r.Data)
+				continue
+			}
+
+			r.RawJSON = rj
+		}*/
+
+	if response.Token == internal_ping_token {
+		// This is an internal ping response, hide that from the user (don't send on the response channel)
+		b.ctrlStats.TxStats.SuccessfulPings++
+		b.logger.Infof("Ping successful, successful pings: %d", b.ctrlStats.TxStats.SuccessfulPings)
+	} else {
+
+		b.ctrlStats.RxStats.ResponseMsgs++
+		b.logger.Infof("Response: %s", string(response.RawJSON))
+		b.responseChan <- response
+		/*if b.wsAddr != "" {
+			select {
+			case b.responseWsChan <- r.RawJSON:
+			default:
+			}
+		}*/
 	}
 }
 
@@ -284,7 +323,12 @@ func (b *Baresip) GetResponseChan() <-chan ResponseMsg {
 }
 
 func (b *Baresip) keepActive() {
-	ticker := time.NewTicker(1 * time.Second)
+	if b.pingInterval <= 0 {
+		b.logger.Info("Pings / keep alive is disabled")
+		return
+	}
+
+	ticker := time.NewTicker(b.pingInterval)
 	defer ticker.Stop()
 
 	for {
@@ -293,13 +337,10 @@ func (b *Baresip) keepActive() {
 			return
 
 		case <-ticker.C:
-			if b.Cmd("uuid", "", "ping") == nil {
-				b.successfulPings++
-				b.logger.Infof("Ping successful, successful pings: %d", b.successfulPings+1)
-			} else {
-				// do not terminate the connection on a failed ping...
-				b.failedPings++
-				b.logger.Infof("Ping failed, failed pings: %d", b.failedPings)
+			if b.Cmd("uuid", "", internal_ping_token) != nil {
+				// FIXME: shall we terminate the connection on a failed ping?
+				b.ctrlStats.TxStats.FailedPings++
+				b.logger.Infof("Ping failed, failed pings: %d", b.ctrlStats.TxStats.FailedPings)
 			}
 		}
 	}
@@ -348,7 +389,7 @@ func (b *Baresip) Start() (context.CancelFunc, error) {
 	}
 
 	// Start reading from the control connection
-	go b.read()
+	go b.readFromCtrlConn()
 
 	// Simple solution for this https://github.com/baresip/baresip/issues/584
 	go b.keepActive()
@@ -407,28 +448,3 @@ func readOutput(name string, reader io.ReadCloser) {
 		log.Printf("Error reading from %s: %v", name, err)
 	}
 }
-
-/*
-func (b *Baresip) end(err C.int) error {
-	if err != 0 {
-		C.ua_stop_all(1)
-	}
-
-	C.ua_close()
-	C.module_app_unload()
-	C.conf_close()
-
-	C.baresip_close()
-
-	// Modules must be unloaded after all application activity has stopped.
-	C.mod_close()
-
-	C.libre_close()
-
-	// Check for memory leaks
-	C.tmr_debug()
-	C.mem_debug()
-
-	return fmt.Errorf("%d", err)
-}
-*/
