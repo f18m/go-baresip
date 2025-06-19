@@ -47,7 +47,8 @@ Please check the [example](./example/main.go) as a starting point.
 
 ## Golang Reference docs
 
-Please check [go-baresip reference docs]((https://pkg.go.dev/github.com/f18m/go-baresip) page.
+Please check [go-baresip reference docs](https://pkg.go.dev/github.com/f18m/go-baresip) page 
+and the [Baresip type docs](https://pkg.go.dev/github.com/f18m/go-baresip/pkg/gobaresip#Baresip) in particular.
 
 
 ## Original project
