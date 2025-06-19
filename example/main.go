@@ -22,7 +22,7 @@ func main() {
 	gb, err := gobaresip.New(
 		gobaresip.SetAudioPath("/usr/share/sounds"),
 		// gobaresip.SetWsAddr("0.0.0.0:8080"),
-		gobaresip.SetDebug(true),
+		gobaresip.SetBaresipDebug(true),
 		gobaresip.SetLogger(loggerAdapter),
 		gobaresip.SetLogBaresipStdoutAndStderr(true, true),
 	)

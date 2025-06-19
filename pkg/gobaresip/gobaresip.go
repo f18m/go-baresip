@@ -19,7 +19,8 @@ import (
 
 const internal_ping_token = "gobaresip_internal_ping"
 
-// ResponseMsg
+// ResponseMsg represents a response message from the baresip control interface.
+// See doxygen docs at https://github.com/baresip/baresip/blob/main/modules/ctrl_tcp/ctrl_tcp.c
 type ResponseMsg struct {
 	Response bool   `json:"response,omitempty"`
 	Ok       bool   `json:"ok,omitempty"`
@@ -28,7 +29,8 @@ type ResponseMsg struct {
 	RawJSON  []byte `json:"-"`
 }
 
-// EventMsg
+// EventMsg represents an event message from the baresip control interface.
+// See doxygen docs at https://github.com/baresip/baresip/blob/main/modules/ctrl_tcp/ctrl_tcp.c
 type EventMsg struct {
 	Event           bool   `json:"event,omitempty"`
 	Type            string `json:"type,omitempty"`
@@ -43,7 +45,9 @@ type EventMsg struct {
 	RawJSON         []byte `json:"-"`
 }
 
-// Logger is the interface that wraps the basic logging methods
+// Logger is an interface that wraps the basic logging methods
+// and can be used to bridge Baresip with a real logger implementation
+// (e.g., logrus, zap, etc.).
 type Logger interface {
 	Debug(args ...interface{})
 	Debugf(template string, args ...interface{})
@@ -59,6 +63,7 @@ func (n *nopLogger) Debugf(_ string, _ ...interface{}) {}
 func (n *nopLogger) Info(_ ...interface{})             {}
 func (n *nopLogger) Infof(_ string, _ ...interface{})  {}
 
+// BareSipClientStats holds statistics about the baresip client.
 type BareSipClientStats struct {
 	TxStats struct {
 		SuccessfulCmds  uint32 `json:"successful_cmds"`

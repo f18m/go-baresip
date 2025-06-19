@@ -44,8 +44,8 @@ func SetAudioPath(opt string) func(*Baresip) error {
 	}
 }
 
-// SetDebug sets the debug mode.
-func SetDebug(opt bool) func(*Baresip) error {
+// SetBaresipDebug sets the debug mode on the baresip server (-v command-line option).
+func SetBaresipDebug(opt bool) func(*Baresip) error {
 	return func(b *Baresip) error {
 		b.debug = opt
 		return nil
@@ -77,7 +77,7 @@ func SetLogBaresipStdoutAndStderr(logStdout bool, logStderr bool) func(*Baresip)
 	}
 }
 
-// SetPingInterval sets the ping interval used as "keep alive" between the baresip C server and the
+// SetPingInterval sets the ping interval used as "keep alive" between the baresip server and the
 // Baresip Go client. If set to -1, no ping will be sent.
 func SetPingInterval(i time.Duration) func(*Baresip) error {
 	return func(b *Baresip) error {
@@ -86,7 +86,7 @@ func SetPingInterval(i time.Duration) func(*Baresip) error {
 	}
 }
 
-// SetCmdWriteTimeout sets the timeout for writing commands on the TCP socket to the baresip C server.
+// SetCmdWriteTimeout sets the timeout for writing commands on the TCP socket to the baresip server.
 // Since commands are typically very short (few bytes), the default timeout is small (100ms).
 func SetCmdWriteTimeout(i time.Duration) func(*Baresip) error {
 	return func(b *Baresip) error {
