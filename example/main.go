@@ -25,7 +25,6 @@ func main() {
 	// Allocate Baresip instance with options
 	gb, err := gobaresip.New(
 		gobaresip.SetAudioPath("/usr/share/sounds"),
-		// gobaresip.SetWsAddr("0.0.0.0:8080"),
 		gobaresip.SetBaresipDebug(true),
 		gobaresip.SetLogger(loggerAdapter),
 		gobaresip.SetLogBaresipStdoutAndStderr(true, true),
@@ -75,6 +74,15 @@ func main() {
 		time.Sleep(5 * time.Second)
 
 		if err := gb.CmdDial("012345"); err != nil {
+			log.Println(err)
+		}
+	}()
+
+	go func() {
+		// Terminate baresip instance after 15 seconds... this is just a demo, you would normally not do this.
+		time.Sleep(15 * time.Second)
+
+		if err := gb.CmdQuit(); err != nil {
 			log.Println(err)
 		}
 	}()

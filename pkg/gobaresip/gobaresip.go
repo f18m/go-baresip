@@ -17,6 +17,7 @@ import (
 	"github.com/markdingo/netstring"
 )
 
+// internal_ping_token is a special token used for internal pings. Never use it in your code.
 const internal_ping_token = "gobaresip_internal_ping"
 
 // ResponseMsg represents a response message from the baresip control interface.
@@ -110,9 +111,6 @@ type Baresip struct {
 	// TCP socket address for the control interface.
 	ctrlAddr string
 
-	// WebSocket address for the control interface (optional)
-	wsAddr string
-
 	// STATUS
 
 	logger Logger
@@ -140,11 +138,6 @@ type Baresip struct {
 
 	// Channel of events (spontaneously sent by baresip) coming from baresip TCP socket
 	eventChan chan EventMsg
-	/*
-		// WebSocket channels for responses and events (if WebSocket support is enabled)
-		responseWsChan chan []byte
-		eventWsChan    chan []byte
-	*/
 
 	// ???
 	autoCmd ac
@@ -197,21 +190,6 @@ func New(options ...func(*Baresip) error) (*Baresip, error) {
 	//    module_app ctrl_tcp.so
 	//    NO module stdio.so
 
-	/* WEBSOCKET SUPPORT DISABLED
-	if b.wsAddr != "" {
-		b.responseWsChan = make(chan []byte, 100)
-		b.eventWsChan = make(chan []byte, 100)
-
-		h := newWsHub(b)
-		go h.run()
-
-		http.HandleFunc("/", serveRoot)
-		http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-			serveWs(h, w, r)
-		})
-		go http.ListenAndServe(b.wsAddr, nil)
-	}*/
-
 	return b, nil
 }
 
@@ -224,10 +202,6 @@ func (b *Baresip) readFromCtrlConn() {
 			b.baresipCancel()
 			break
 		}
-
-		// TODO:
-		// use json.Unmarshal() with Decoder.DisallowUnknownFields() to ensure strict JSON parsing
-		// try to https://pkg.go.dev/encoding/json#Decoder.DisallowUnknownFields
 
 		// What we received might be only 2 types of messages:
 		// 1. EventMsg
@@ -267,13 +241,6 @@ func (b *Baresip) onCtrlConnEvent(event EventMsg) {
 	b.ctrlStats.RxStats.EventMsgs++
 	b.logger.Infof("Event: %s", string(event.RawJSON))
 	b.eventChan <- event
-	/*
-		if b.wsAddr != "" {
-			select {
-			case b.eventWsChan <- e.RawJSON:
-			default:
-			}
-		}*/
 }
 
 func (b *Baresip) onCtrlConnResponse(response ResponseMsg) {
@@ -306,7 +273,8 @@ func (b *Baresip) onCtrlConnResponse(response ResponseMsg) {
 			}
 
 			r.RawJSON = rj
-		}*/
+		}
+	*/
 
 	if response.Token == internal_ping_token {
 		// This is an internal ping response, hide that from the user (don't send on the response channel)
@@ -317,12 +285,6 @@ func (b *Baresip) onCtrlConnResponse(response ResponseMsg) {
 		b.ctrlStats.RxStats.ResponseMsgs++
 		b.logger.Infof("Response: %s", string(response.RawJSON))
 		b.responseChan <- response
-		/*if b.wsAddr != "" {
-			select {
-			case b.responseWsChan <- r.RawJSON:
-			default:
-			}
-		}*/
 	}
 }
 
@@ -442,7 +404,6 @@ func (b *Baresip) connectCtrl() error {
 }
 
 func (b *Baresip) WaitForShutdown() error {
-
 	if b.baresipCtx.Err() == nil {
 		// this is a logical programming error...
 		return fmt.Errorf("Baresip is still running, please cancel its context provided by Start() before calling WaitForShutdown()")
