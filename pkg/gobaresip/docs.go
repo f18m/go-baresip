@@ -4,9 +4,9 @@
 // or SIP-based communication systems.
 //
 // For an example of how to use this package, see the example in the
-// `example/main.go` file.
+// `examples` direcotry.
 //
-// The package provides a `Baresip` struct that represents a Baresip instance and methods
-// to configure it, start it, and interact with it. Looking at the Baresip documentation is
+// The package provides a [Baresip] struct that represents a Baresip instance and methods
+// to configure it, start it, and interact with it. Looking at the [Baresip] documentation is
 // the recommended way to understand the available commands and events.
 package gobaresip

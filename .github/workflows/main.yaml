@@ -32,7 +32,7 @@ jobs:
 
       - name: Build golang code
         run: |
-          CGO_ENABLED=0 GOOS=linux go build -mod=readonly -v -o bin/example example/main.go
+          CGO_ENABLED=0 GOOS=linux go build -mod=readonly -v -o bin/internal-baresip examples/internal-baresip/main.go
 
       - name: Run unit tests
         run: |
