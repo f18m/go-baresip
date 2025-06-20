@@ -25,6 +25,7 @@ coverage:
 build-examples:
 	@go mod download
 	CGO_ENABLED=0 GOOS=linux go build -mod=readonly -v -o bin/internal-baresip examples/internal-baresip/main.go
+	CGO_ENABLED=0 GOOS=linux go build -mod=readonly -v -o bin/external-baresip examples/external-baresip/main.go
 
 clean: docker-clean
 	@echo Cleaning...

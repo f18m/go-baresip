@@ -80,6 +80,10 @@ type CommandMsg struct {
 
 // Cmd will send a raw baresip command over ctrl_tcp.
 func (b *Baresip) Cmd(command, params, token string) error {
+	if b.ctrlConn == nil {
+		return ErrNoCtrlConn
+	}
+
 	msg, err := json.Marshal(&CommandMsg{
 		Command: command,
 		Params:  params,

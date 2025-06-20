@@ -1,8 +1,10 @@
-// Package  main contains a simple app showing how to use the gobaresip module.
+// Package main contains a simple app showing how to use the gobaresip module
+// assuming you have a "baresip" process running externally with the ctrl_tcp module enabled.
 package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"os"
 	"os/signal"
@@ -26,15 +28,8 @@ func main() {
 
 	// Allocate Baresip instance with options
 	gb, err := gobaresip.New(
-		gobaresip.SetInternalBaresipStartupOptions(
-			gobaresip.BaresipStartOptions{
-				AudioPath: "/usr/share/sounds",
-				UserAgent: "gobaresip-example",
-				Debug:     true,
-			},
-		),
+		gobaresip.UseExternalBaresip(), // **Use an external Baresip process**
 		gobaresip.SetLogger(loggerAdapter),
-		gobaresip.CaptureInternalBaresipStdoutStderr(true, true),
 		gobaresip.SetPingInterval(6*time.Second),
 	)
 	if err != nil {
@@ -44,14 +39,19 @@ func main() {
 	// Run Baresip Serve() method.
 	// This is meant to be similar to the http.Serve() method with the difference that
 	// it takes an explicit context that can be used to cancel the Baresip instance.
-	// Serve() will start the baresip process and connect to the control TCP server.
+	// In this example, we assume there is an external Baresip process launched
+	// so Serve() won't start any background process.
 	// The Baresip instance can be terminated at any time using the baresipCancel() function.
 	// Communication happens using the event/response channels... keep reading
 	baresipCtx, baresipCancel := context.WithCancel(context.Background())
 	go func() {
 		err := gb.Serve(baresipCtx)
 		if err != nil {
-			loggerAdapter.Errorf("baresip exit error: %s", err)
+			if errors.Is(err, gobaresip.ErrNoCtrlConn) {
+				loggerAdapter.Error("Baresip control connection not established. Did you start in another terminal a 'baresip' instance with the ctrl_tcp module enabled?")
+			} else {
+				loggerAdapter.Errorf("baresip exit error: %s", err)
+			}
 		}
 	}()
 

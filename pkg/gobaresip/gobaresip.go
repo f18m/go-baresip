@@ -240,14 +240,11 @@ func (b *Baresip) readFromCtrlConn() error {
 			b.onCtrlConnEvent(event)
 		}
 	}
-
-	// b.logger.Infof("go-baresip goroutine stopped reading TCP socket")
-	// return nil
 }
 
 func (b *Baresip) onCtrlConnEvent(event EventMsg) {
 	b.ctrlStats.RxStats.EventMsgs++
-	b.logger.Infof("Event: %s", string(event.RawJSON))
+	b.logger.Infof("event from baresip: %s", string(event.RawJSON))
 	b.eventChan <- event
 }
 
@@ -255,11 +252,11 @@ func (b *Baresip) onCtrlConnResponse(response ResponseMsg) {
 	if response.Token == internalPingToken {
 		// This is an internal ping response, hide that from the user (don't send on the response channel)
 		b.ctrlStats.TxStats.SuccessfulPings++
-		b.logger.Infof("Ping successful, successful pings: %d", b.ctrlStats.TxStats.SuccessfulPings)
+		b.logger.Infof("ping successful, successful pings: %d", b.ctrlStats.TxStats.SuccessfulPings)
 	} else {
 
 		b.ctrlStats.RxStats.ResponseMsgs++
-		b.logger.Infof("Response: %s", string(response.RawJSON))
+		b.logger.Infof("response from baresip: %s", string(response.RawJSON))
 		b.responseChan <- response
 	}
 }
@@ -276,7 +273,7 @@ func (b *Baresip) GetResponseChan() <-chan ResponseMsg {
 
 func (b *Baresip) keepActive(done <-chan bool) {
 	if b.pingInterval <= 0 {
-		b.logger.Info("Pings / keep alive is disabled")
+		b.logger.Info("pings / keep alives are disabled")
 		return
 	}
 
@@ -293,7 +290,7 @@ func (b *Baresip) keepActive(done <-chan bool) {
 			if b.Cmd("uuid", "", internalPingToken) != nil {
 				// FIXME: shall we terminate the connection on a failed ping?
 				b.ctrlStats.TxStats.FailedPings++
-				b.logger.Infof("Ping failed, failed pings: %d", b.ctrlStats.TxStats.FailedPings)
+				b.logger.Infof("ping failed; count of failed pings: %d", b.ctrlStats.TxStats.FailedPings)
 			}
 		}
 	}
@@ -426,6 +423,7 @@ func (b *Baresip) connectCtrl() error {
 
 	attempts := 0
 	for {
+		b.logger.Infof("attempting to connect to control socket at %s (attempt %d)", b.ctrlAddr, attempts+1)
 		b.ctrlConn, err = net.Dial("tcp", b.ctrlAddr)
 		switch {
 		case errors.Is(err, syscall.ECONNREFUSED):
@@ -434,7 +432,7 @@ func (b *Baresip) connectCtrl() error {
 				time.Sleep(100 * time.Millisecond) // Give baresip some time to start
 			} else {
 				// give up... too many attempts
-				return err
+				return ErrNoCtrlConn
 			}
 
 		case err != nil:
@@ -443,6 +441,7 @@ func (b *Baresip) connectCtrl() error {
 		}
 
 		if err == nil {
+			b.logger.Infof("successfully connected to control socket at %s", b.ctrlAddr)
 			break // Successfully connected to the control socket
 		}
 	}
