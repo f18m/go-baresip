@@ -1,6 +1,6 @@
 # go-baresip Makefile
 
-all: build-example lint test
+all: build-examples lint test
 
 
 # ---------------------------------------------------------------------------- #
@@ -22,9 +22,9 @@ coverage:
 	@go tool cover -func=coverage.out
 	@go tool cover -html=coverage.out
 
-build-example:
+build-examples:
 	@go mod download
-	CGO_ENABLED=0 GOOS=linux go build -mod=readonly -v -o bin/example example/main.go
+	CGO_ENABLED=0 GOOS=linux go build -mod=readonly -v -o bin/internal-baresip examples/internal-baresip/main.go
 
 clean: docker-clean
 	@echo Cleaning...

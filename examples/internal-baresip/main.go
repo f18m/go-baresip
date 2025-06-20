@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"os/signal"
@@ -17,6 +18,18 @@ type zapLogger struct {
 	*zap.SugaredLogger
 }
 
+// BaresipStartOptions holds the options for starting the internal baresip instance.
+type BaresipStartOptions struct {
+	// Name of the SIP user agent
+	UserAgent string
+	// Path to the baresip configuration directory. It defaults to the $HOME directory.
+	ConfigPath string
+	// Path to the audio files directory. It defaults to the current directory.
+	AudioPath string
+	// Debug mode. If true, it enables debug logging by baresip.
+	Debug bool
+}
+
 func main() {
 	// Initialize a logger, e.g. zap
 	logger, _ := zap.NewProduction()
@@ -25,22 +38,32 @@ func main() {
 
 	// Allocate Baresip instance with options
 	gb, err := gobaresip.New(
-		gobaresip.SetAudioPath("/usr/share/sounds"),
-		gobaresip.SetBaresipDebug(true),
+		gobaresip.SetInternalBaresipStartupOptions(
+			gobaresip.BaresipStartOptions{
+				AudioPath: "/usr/share/sounds",
+				UserAgent: "gobaresip-example",
+				Debug:     true,
+			},
+		),
 		gobaresip.SetLogger(loggerAdapter),
-		gobaresip.SetLogBaresipStdoutAndStderr(true, true),
+		gobaresip.CaptureInternalBaresipStdoutStderr(true, true),
 		gobaresip.SetPingInterval(6*time.Second),
 	)
 	if err != nil {
 		loggerAdapter.Fatal(err)
 	}
 
-	// Start the Baresip instance
+	// Serve the Baresip instance
 	// This will start the baresip process and connect to the control TCP server.
-	cancelFunc, err := gb.Start()
-	if err != nil {
-		loggerAdapter.Errorf("failed starting baresip: %s", err)
-	}
+	// The Baresip instance can be terminated at any time using the baresipCancel() function.
+	// Communication happens using the event/response channels... keep reading
+	baresipCtx, baresipCancel := context.WithCancel(context.Background())
+	go func() {
+		err := gb.Serve(baresipCtx)
+		if err != nil {
+			loggerAdapter.Errorf("baresip exit error: %s", err)
+		}
+	}()
 
 	// Process
 	// - events: unsolicited messages from baresip, e.g. incoming calls, registrations, etc.
@@ -72,18 +95,19 @@ func main() {
 	}()
 
 	go func() {
-		// Give baresip some time to init and register ua
+		// Give baresip some time to init and register SIP User Agent
 		time.Sleep(5 * time.Second)
 
+		// Dial a dummy phone number
 		if err := gb.CmdDial("012345"); err != nil {
 			log.Println(err)
 		}
 	}()
 
 	go func() {
-		// Terminate baresip instance after 15 seconds... this is just a demo, you would normally not do this.
 		time.Sleep(15 * time.Second)
 
+		// Terminate baresip instance after 15 seconds... this is just a demo, you would normally not do this.
 		if err := gb.CmdQuit(); err != nil {
 			log.Println(err)
 		}
@@ -100,14 +124,8 @@ func main() {
 
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
+	loggerAdapter.Info("Golang Baresip Example: waiting for CTRL+C or SIGTERM to exit...")
 	<-done
-	cancelFunc()
-	loggerAdapter.Info("Baresip has been stopped")
-
-	err = gb.WaitForShutdown()
-	if err != nil {
-		loggerAdapter.Errorf("failed waiting baresip: %s", err)
-	}
-
+	baresipCancel()
 	loggerAdapter.Info("Golang Baresip Example exiting gracefully")
 }
