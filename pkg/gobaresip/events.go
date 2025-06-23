@@ -1,0 +1,48 @@
+package gobaresip
+
+//
+// Please note that this file should be maintained in sync with the string constants
+// defined in the C code of Baresip, specifically in the file `src/bevent.c`,
+// and the function
+//    const char *uag_event_str(enum ua_event ev)
+//
+
+const (
+	UA_EVENT_REGISTERING          = "REGISTERING"
+	UA_EVENT_REGISTER_OK          = "REGISTER_OK"
+	UA_EVENT_REGISTER_FAIL        = "REGISTER_FAIL"
+	UA_EVENT_FALLBACK_OK          = "FALLBACK_OK"
+	UA_EVENT_FALLBACK_FAIL        = "FALLBACK_FAIL"
+	UA_EVENT_UNREGISTERING        = "UNREGISTERING"
+	UA_EVENT_MWI_NOTIFY           = "MWI_NOTIFY"
+	UA_EVENT_CREATE               = "CREATE"
+	UA_EVENT_SHUTDOWN             = "SHUTDOWN"
+	UA_EVENT_EXIT                 = "EXIT"
+	UA_EVENT_SIPSESS_CONN         = "SIPSESS_CONN"
+	UA_EVENT_CALL_INCOMING        = "CALL_INCOMING"
+	UA_EVENT_CALL_OUTGOING        = "CALL_OUTGOING"
+	UA_EVENT_CALL_RINGING         = "CALL_RINGING"
+	UA_EVENT_CALL_PROGRESS        = "CALL_PROGRESS"
+	UA_EVENT_CALL_ANSWERED        = "CALL_ANSWERED"
+	UA_EVENT_CALL_ESTABLISHED     = "CALL_ESTABLISHED"
+	UA_EVENT_CALL_CLOSED          = "CALL_CLOSED"
+	UA_EVENT_CALL_TRANSFER        = "TRANSFER"
+	UA_EVENT_CALL_TRANSFER_FAILED = "TRANSFER_FAILED"
+	UA_EVENT_CALL_REDIRECT        = "CALL_REDIRECT"
+	UA_EVENT_CALL_DTMF_START      = "CALL_DTMF_START"
+	UA_EVENT_CALL_DTMF_END        = "CALL_DTMF_END"
+	UA_EVENT_CALL_RTPESTAB        = "CALL_RTPESTAB"
+	UA_EVENT_CALL_RTCP            = "CALL_RTCP"
+	UA_EVENT_CALL_MENC            = "CALL_MENC"
+	UA_EVENT_VU_TX                = "VU_TX_REPORT"
+	UA_EVENT_VU_RX                = "VU_RX_REPORT"
+	UA_EVENT_AUDIO_ERROR          = "AUDIO_ERROR"
+	UA_EVENT_CALL_LOCAL_SDP       = "CALL_LOCAL_SDP"
+	UA_EVENT_CALL_REMOTE_SDP      = "CALL_REMOTE_SDP"
+	UA_EVENT_CALL_HOLD            = "CALL_HOLD"
+	UA_EVENT_CALL_RESUME          = "CALL_RESUME"
+	UA_EVENT_REFER                = "REFER"
+	UA_EVENT_MODULE               = "MODULE"
+	UA_EVENT_END_OF_FILE          = "END_OF_FILE"
+	UA_EVENT_CUSTOM               = "CUSTOM"
+)

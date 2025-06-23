@@ -117,6 +117,14 @@ linters:
   settings:
     wsl:
       allow-trailing-comment: true
+
+  exclusions:
+    rules:
+      # this particular file contains constants that are, on-purpose, matching the C style convention all-uppercase
+      - path: pkg/gobaresip/events.go
+        linters: 
+        - revive
+
 formatters:
   enable:
     - gofmt
