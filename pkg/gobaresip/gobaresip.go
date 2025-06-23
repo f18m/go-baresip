@@ -21,6 +21,13 @@ import (
 // internalPingToken is a special token used for internal pings. Never use it in your code.
 const internalPingToken = "gobaresip_internal_ping"
 
+// ConnectedMsg is an internal message used by [Baresip] to signal that the
+// connection to the baresip control interface has been established.
+type ConnectedMsg struct {
+	// Connected is always true, used to signal that the connection is established
+	Connected bool `json:"connected"`
+}
+
 // ResponseMsg represents a response message from the baresip control interface.
 // See doxygen docs at https://github.com/baresip/baresip/blob/main/modules/ctrl_tcp/ctrl_tcp.c
 type ResponseMsg struct {
@@ -156,6 +163,10 @@ type Baresip struct {
 	// stats
 	ctrlStats BareSipClientStats
 
+	// CHANNELS
+
+	connectedChan chan ConnectedMsg
+
 	// Channel of responses (to commands) coming from baresip TCP socket
 	responseChan chan ResponseMsg
 
@@ -168,6 +179,7 @@ type Baresip struct {
 // [SetLogger], etc. If no options are provided, it will use default values.
 func New(options ...func(*Baresip) error) (*Baresip, error) {
 	b := &Baresip{
+		connectedChan: make(chan ConnectedMsg, 1),
 		responseChan:  make(chan ResponseMsg, 100),
 		eventChan:     make(chan EventMsg, 100),
 		runBaresipCmd: true,
@@ -259,6 +271,11 @@ func (b *Baresip) onCtrlConnResponse(response ResponseMsg) {
 		b.logger.Infof("response from baresip: %s", string(response.RawJSON))
 		b.responseChan <- response
 	}
+}
+
+// GetConnectedChan returns the receive-only [ConnectMsg] channel for detecting successful connection to Baresip TCP control socket.
+func (b *Baresip) GetConnectedChan() <-chan ConnectedMsg {
+	return b.connectedChan
 }
 
 // GetEventChan returns the receive-only [EventMsg] channel for reading data.
@@ -445,6 +462,9 @@ func (b *Baresip) connectCtrl() error {
 			break // Successfully connected to the control socket
 		}
 	}
+
+	// tell the channel we connected
+	b.connectedChan <- ConnectedMsg{Connected: true}
 
 	// link the TCP socket to the netstring decoder/encoder
 	b.ctrlConnDec = netstring.NewDecoder(b.ctrlConn)

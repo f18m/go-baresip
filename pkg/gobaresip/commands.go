@@ -138,9 +138,9 @@ func (b *Baresip) CmdAuplay(s string) error {
 }
 
 // CmdAusrc will switch audio source
-func (b *Baresip) CmdAusrc(s string) error {
+func (b *Baresip) CmdAusrc(driver, device string) error {
 	c := "ausrc"
-	return b.Cmd(c, s, "cmd_"+c+"_"+s)
+	return b.Cmd(c, driver+","+device, "cmd_"+c+"_"+driver+"_"+device)
 }
 
 // CmdCallstat will show call status

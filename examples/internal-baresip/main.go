@@ -59,12 +59,23 @@ func main() {
 	// - events: unsolicited messages from baresip, e.g. incoming calls, registrations, etc.
 	// - responses: responses to commands sent to baresip, e.g. command results
 	// reading from the 2 channels:
+	cChan := gb.GetConnectedChan()
 	eChan := gb.GetEventChan()
 	rChan := gb.GetResponseChan()
 
 	go func() {
 		for {
 			select {
+			case c, ok := <-cChan:
+				if !ok {
+					continue
+				}
+				if c.Connected {
+					log.Println("CONNECTED!")
+				} else {
+					log.Println("DISCONNECTED!")
+				}
+
 			case e, ok := <-eChan:
 				if !ok {
 					continue
