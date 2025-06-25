@@ -22,10 +22,17 @@ coverage:
 	@go tool cover -func=coverage.out
 	@go tool cover -html=coverage.out
 
+EXAMPLES:=\
+	internal-baresip \
+	external-baresip \
+	basic-nochannels
+
 build-examples:
 	@go mod download
-	CGO_ENABLED=0 GOOS=linux go build -mod=readonly -v -o bin/internal-baresip examples/internal-baresip/main.go
-	CGO_ENABLED=0 GOOS=linux go build -mod=readonly -v -o bin/external-baresip examples/external-baresip/main.go
+	for ex in $(EXAMPLES); do \
+		echo "Building [$${ex}] as bin/$${ex}" ; \
+		CGO_ENABLED=0 GOOS=linux go build -mod=readonly -v -o bin/$${ex} examples/$${ex}/main.go ; \
+	done
 
 clean: docker-clean
 	@echo Cleaning...

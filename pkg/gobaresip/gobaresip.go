@@ -145,6 +145,9 @@ type Baresip struct {
 	// Timeout for writing commands to the control interface.
 	ctrlCmdWriteTimeout time.Duration
 
+	// Timeout for reading command responses from [CmdTxWithAck].
+	ctrlCmdResponseTimeout time.Duration
+
 	// TCP socket address for the control interface.
 	ctrlAddr string
 
@@ -203,6 +206,9 @@ func New(options ...func(*Baresip) error) (*Baresip, error) {
 	}
 	if b.ctrlCmdWriteTimeout == 0 {
 		b.ctrlCmdWriteTimeout = 100 * time.Millisecond // Default write timeout for control commands
+	}
+	if b.ctrlCmdResponseTimeout == 0 {
+		b.ctrlCmdResponseTimeout = 100 * time.Millisecond // Default read timeout for control commands
 	}
 
 	// FIXME:
@@ -264,7 +270,9 @@ func (b *Baresip) onCtrlConnResponse(response ResponseMsg) {
 	if response.Token == internalPingToken {
 		// This is an internal ping response, hide that from the user (don't send on the response channel)
 		b.ctrlStats.TxStats.SuccessfulPings++
-		b.logger.Infof("ping successful, successful pings: %d", b.ctrlStats.TxStats.SuccessfulPings)
+		b.logger.Infof("ping successful, successful pings: %d; failed pings: %d",
+			b.ctrlStats.TxStats.SuccessfulPings,
+			b.ctrlStats.TxStats.FailedPings)
 	} else {
 
 		b.ctrlStats.RxStats.ResponseMsgs++

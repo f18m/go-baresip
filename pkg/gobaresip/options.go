@@ -46,6 +46,15 @@ func SetCmdWriteTimeout(i time.Duration) func(*Baresip) error {
 	}
 }
 
+// SetCmdResponseTimeout sets the timeout for reading command responses from the TCP socket to the baresip server.
+// Since commands are typically very short (few bytes), the default timeout is small (100ms).
+func SetCmdResponseTimeout(i time.Duration) func(*Baresip) error {
+	return func(b *Baresip) error {
+		b.ctrlCmdResponseTimeout = i
+		return nil
+	}
+}
+
 // UseExternalBaresip can be used to disable Baresip from launching a baresip process itself.
 // If UseExternalBaresip is used, then [Baresip] expects that an external baresip process is already running
 // and that the ctrl_tcp module is enabled and listening on the address set by [SetCtrlTCPAddr].

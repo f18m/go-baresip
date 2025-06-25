@@ -114,6 +114,12 @@ func main() {
 		}
 	}()
 
+	go func() {
+		// stop this application after 20sec
+		time.Sleep(20 * time.Second)
+		_ = syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+	}()
+
 	// Show proper shutdown: we will wait for a signal (SIGINT or SIGTERM) to gracefully stop the Baresip instance.
 	sigs := make(chan os.Signal, 1)
 	done := make(chan bool, 1)
