@@ -1,10 +1,8 @@
-// Package main contains a simple app showing how to use the gobaresip module
-// assuming you have a "baresip" process running externally with the ctrl_tcp module enabled.
+// Package  main contains a simple app showing how to use the gobaresip module.
 package main
 
 import (
 	"context"
-	"errors"
 	"log"
 	"os"
 	"os/signal"
@@ -28,8 +26,15 @@ func main() {
 
 	// Allocate Baresip instance with options
 	gb, err := gobaresip.New(
-		gobaresip.UseExternalBaresip(), // **Use an external Baresip process**
+		gobaresip.SetInternalBaresipStartupOptions(
+			gobaresip.BaresipStartOptions{
+				AudioPath: "/usr/share/sounds",
+				UserAgent: "gobaresip-example",
+				Debug:     true,
+			},
+		),
 		gobaresip.SetLogger(loggerAdapter),
+		gobaresip.CaptureInternalBaresipStdoutStderr(true, true),
 		gobaresip.SetPingInterval(6*time.Second),
 	)
 	if err != nil {
@@ -39,48 +44,14 @@ func main() {
 	// Run Baresip Serve() method.
 	// This is meant to be similar to the http.Serve() method with the difference that
 	// it takes an explicit context that can be used to cancel the Baresip instance.
-	// In this example, we assume there is an external Baresip process launched
-	// so Serve() won't start any background process.
+	// Serve() will start the baresip process and connect to the control TCP server.
 	// The Baresip instance can be terminated at any time using the baresipCancel() function.
 	// Communication happens using the event/response channels... keep reading
 	baresipCtx, baresipCancel := context.WithCancel(context.Background())
 	go func() {
 		err := gb.Serve(baresipCtx)
 		if err != nil {
-			if errors.Is(err, gobaresip.ErrNoCtrlConn) {
-				loggerAdapter.Error("Baresip control connection not established. Did you start in another terminal a 'baresip' instance with the ctrl_tcp module enabled?")
-			} else {
-				loggerAdapter.Errorf("baresip exit error: %s", err)
-			}
-		}
-	}()
-
-	// Process
-	// - events: unsolicited messages from baresip, e.g. incoming calls, registrations, etc.
-	// - responses: responses to commands sent to baresip, e.g. command results
-	// reading from the 2 channels:
-	eChan := gb.GetEventChan()
-	rChan := gb.GetResponseChan()
-
-	go func() {
-		for {
-			select {
-			case e, ok := <-eChan:
-				if !ok {
-					continue
-				}
-				log.Println("EVENT: " + string(e.RawJSON))
-
-				// your logic goes here
-
-			case r, ok := <-rChan:
-				if !ok {
-					continue
-				}
-				log.Println("RESPONSE: " + string(r.RawJSON))
-
-				// your logic goes here
-			}
+			loggerAdapter.Errorf("baresip exit error: %s", err)
 		}
 	}()
 
@@ -89,8 +60,15 @@ func main() {
 		time.Sleep(5 * time.Second)
 
 		// Dial a dummy phone number
-		if err := gb.CmdDial("012345"); err != nil {
-			log.Println(err)
+		if resp, err := gb.CmdTxWithAck(gobaresip.CommandMsg{
+			Command: "dial",
+			Params:  "012345",
+			Token:   "test_dial",
+		}); err != nil {
+			loggerAdapter.Info(err)
+		} else {
+			resp.RawJSON = nil // omit to avoid verbose logs
+			loggerAdapter.Infof("RESPONSE: %+v", resp)
 		}
 	}()
 

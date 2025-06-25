@@ -1,6 +1,7 @@
 package gobaresip
 
 import (
+	"context"
 	"strconv"
 	"time"
 
@@ -71,24 +72,32 @@ import (
 
 */
 
-// CommandMsg struct for ctrl_tcp
+// CommandMsg defines the JSON structure accepted by Baresip ctrl_tcp socket
+// See doxygen docs at https://github.com/baresip/baresip/blob/main/modules/ctrl_tcp/ctrl_tcp.c
 type CommandMsg struct {
 	Command string `json:"command,omitempty"`
 	Params  string `json:"params,omitempty"`
 	Token   string `json:"token,omitempty"`
 }
 
-// Cmd will send a raw baresip command over ctrl_tcp.
+// Cmd will send a raw baresip command over the control TCP socket but will not wait
+// for any acknowledge. It might return an error in case the write on TCP socket is erroring out though.
 func (b *Baresip) Cmd(command, params, token string) error {
-	if b.ctrlConn == nil {
-		return ErrNoCtrlConn
-	}
-
-	msg, err := json.Marshal(&CommandMsg{
+	return b.CmdTx(CommandMsg{
 		Command: command,
 		Params:  params,
 		Token:   token,
 	})
+}
+
+// CmdTx will send a raw baresip command over the control TCP socket but will not wait
+// for any acknowledge. It might return an error in case the write on TCP socket is erroring out though.
+func (b *Baresip) CmdTx(cmd CommandMsg) error {
+	if b.ctrlConn == nil {
+		return ErrNoCtrlConn
+	}
+
+	msg, err := json.Marshal(&cmd)
 	if err != nil {
 		return err
 	}
@@ -111,6 +120,44 @@ func (b *Baresip) Cmd(command, params, token string) error {
 	}
 
 	return err
+}
+
+// CmdTxWithAck will send a raw baresip command over the control TCP socket and will wait
+// for the command response, i.e. baresip acknowledgement, and will return it.
+// When using this function, do not simultaneously try to read from the channel returned by
+// [GetResponseChan].
+// This function expects a single response to be read in the
+// TCP socket buffer and will discard and response whose token does not match with [cmd.Token].
+// Note that proper error checking should look like:
+//
+//	if resp, err := baresipInstance.CmdTxWithAck(...); err != nil || !resp.Ok {
+//	    // ... handle the error: err != nil indicates a TX failure; resp.Ok == false indicates a command failed inside Baresip
+//	}
+func (b *Baresip) CmdTxWithAck(cmd CommandMsg) (ResponseMsg, error) {
+	if err := b.CmdTx(cmd); err != nil {
+		return ResponseMsg{}, err
+	}
+
+	ctx, cancelFn := context.WithTimeout(context.Background(), b.ctrlCmdResponseTimeout)
+	defer cancelFn()
+
+	// Block till either the context is cancelled or we get the response back
+	for {
+		select {
+		case <-ctx.Done():
+			b.logger.Infof("command response read timed out: %s", ctx.Err())
+			return ResponseMsg{}, ctx.Err()
+
+		case response := <-b.responseChan:
+			if response.Token != cmd.Token {
+				b.logger.Infof("received a response for another (previously sent) command: %+v... discarding", response)
+				// keep looping and keep waiting for another response
+			} else {
+				// completed
+				return response, nil
+			}
+		}
+	}
 }
 
 // CmdAccept will accept incoming call
@@ -173,10 +220,10 @@ func (b *Baresip) CmdAutodialdelay(n int) error {
 	return b.Cmd(c, strconv.Itoa(n), "cmd_"+c+"_"+strconv.Itoa(n))
 }
 
-// CmdDial will dial number
-func (b *Baresip) CmdDial(s string) error {
+// CmdDial will start an outgoing call to the provided SIP URI.
+func (b *Baresip) CmdDial(calledsipURI string) error {
 	c := "dial"
-	return b.Cmd(c, s, "cmd_"+c+"_"+s)
+	return b.Cmd(c, calledsipURI, "cmd_"+c+"_"+calledsipURI)
 }
 
 // CmdDialcontact will dial current contact
@@ -222,9 +269,9 @@ func (b *Baresip) CmdHangupall(s string) error {
 }
 
 // CmdInsmod will load module
-func (b *Baresip) CmdInsmod(s string) error {
+func (b *Baresip) CmdInsmod(moduleName string) error {
 	c := "insmod"
-	return b.Cmd(c, s, "cmd_"+c+"_"+s)
+	return b.Cmd(c, moduleName, "cmd_"+c+"_"+moduleName)
 }
 
 // CmdListcalls will list active calls
@@ -240,9 +287,9 @@ func (b *Baresip) CmdReginfo() error {
 }
 
 // CmdRmmod will unload module
-func (b *Baresip) CmdRmmod(s string) error {
+func (b *Baresip) CmdRmmod(moduleName string) error {
 	c := "rmmod"
-	return b.Cmd(c, s, "cmd_"+c+"_"+s)
+	return b.Cmd(c, moduleName, "cmd_"+c+"_"+moduleName)
 }
 
 // CmdSetadelay will set answer delay for outgoing call
@@ -263,22 +310,22 @@ func (b *Baresip) CmdUadelall() error {
 	return b.Cmd(c, "", "cmd_"+c)
 }
 
-// CmdUafind will find User-Agent <aor>
-func (b *Baresip) CmdUafind(s string) error {
+// CmdUafind will find User-Agent <sipURI>
+func (b *Baresip) CmdUafind(sipURI string) error {
 	c := "uafind"
-	return b.Cmd(c, s, "cmd_"+c+"_"+s)
+	return b.Cmd(c, sipURI, "cmd_"+c+"_"+sipURI)
 }
 
 // CmdUanew will create User-Agent
-func (b *Baresip) CmdUanew(s string) error {
+func (b *Baresip) CmdUanew(sipURI string) error {
 	c := "uanew"
-	return b.Cmd(c, s, "cmd_"+c+"_"+s)
+	return b.Cmd(c, sipURI, "cmd_"+c+"_"+sipURI)
 }
 
 // CmdUareg will register <regint> [index]
-func (b *Baresip) CmdUareg(s string) error {
+func (b *Baresip) CmdUareg(sipURI string) error {
 	c := "uareg"
-	return b.Cmd(c, s, "cmd_"+c+"_"+s)
+	return b.Cmd(c, sipURI, "cmd_"+c+"_"+sipURI)
 }
 
 // CmdQuit will quit baresip
