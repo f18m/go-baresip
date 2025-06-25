@@ -2,6 +2,7 @@ package gobaresip
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -82,6 +83,9 @@ type CommandMsg struct {
 
 // Cmd will send a raw baresip command over the control TCP socket but will not wait
 // for any acknowledge. It might return an error in case the write on TCP socket is erroring out though.
+// When using [Cmd] you must have a goroutine reading the response from the channel returned by [Baresip.GetResponseChan].
+// A nil error returned by this function indicates only the TX of the command was successful;
+// only the [ResponseMsg] from the response channel indicates if the command was executed successfully by baresip.
 func (b *Baresip) Cmd(command, params, token string) error {
 	return b.CmdTx(CommandMsg{
 		Command: command,
@@ -92,6 +96,7 @@ func (b *Baresip) Cmd(command, params, token string) error {
 
 // CmdTx will send a raw baresip command over the control TCP socket but will not wait
 // for any acknowledge. It might return an error in case the write on TCP socket is erroring out though.
+// When using [CmdTx] you must have a goroutine reading the response from the channel returned by [Baresip.GetResponseChan].
 func (b *Baresip) CmdTx(cmd CommandMsg) error {
 	if b.ctrlConn == nil {
 		return ErrNoCtrlConn
@@ -128,12 +133,12 @@ func (b *Baresip) CmdTx(cmd CommandMsg) error {
 // [GetResponseChan].
 // This function expects a single response to be read in the
 // TCP socket buffer and will discard and response whose token does not match with [cmd.Token].
-// Note that proper error checking should look like:
-//
-//	if resp, err := baresipInstance.CmdTxWithAck(...); err != nil || !resp.Ok {
-//	    // ... handle the error: err != nil indicates a TX failure; resp.Ok == false indicates a command failed inside Baresip
-//	}
 func (b *Baresip) CmdTxWithAck(cmd CommandMsg) (ResponseMsg, error) {
+	if cmd.Token == "" {
+		// we later want to check that the response token is matching, so make sure the token is non-empty:
+		cmd.Token = cmd.Command + "_token"
+	}
+
 	if err := b.CmdTx(cmd); err != nil {
 		return ResponseMsg{}, err
 	}
@@ -153,7 +158,12 @@ func (b *Baresip) CmdTxWithAck(cmd CommandMsg) (ResponseMsg, error) {
 				b.logger.Infof("received a response for another (previously sent) command: %+v... discarding", response)
 				// keep looping and keep waiting for another response
 			} else {
-				// completed
+				// completed.. successfully or not?
+				if !response.Ok {
+					return response, fmt.Errorf("%w: %s", ErrFailedCmd, response.Data)
+				}
+
+				// success!
 				return response, nil
 			}
 		}
@@ -161,175 +171,146 @@ func (b *Baresip) CmdTxWithAck(cmd CommandMsg) (ResponseMsg, error) {
 }
 
 // CmdAccept will accept incoming call
-func (b *Baresip) CmdAccept() error {
-	c := "accept"
-	return b.Cmd(c, "", "cmd_"+c)
+func (b *Baresip) CmdAccept() (ResponseMsg, error) {
+	return b.CmdTxWithAck(CommandMsg{Command: "accept", Params: ""})
 }
 
 // CmdAcceptdir will accept incoming call with audio and videodirection.
-func (b *Baresip) CmdAcceptdir(s string) error {
-	c := "acceptdir"
-	return b.Cmd(c, s, "cmd_"+c+"_"+s)
+func (b *Baresip) CmdAcceptdir(s string) (ResponseMsg, error) {
+	return b.CmdTxWithAck(CommandMsg{Command: "acceptdir", Params: s})
 }
 
 // CmdAnswermode will set answer mode
-func (b *Baresip) CmdAnswermode(s string) error {
-	c := "answermode"
-	return b.Cmd(c, s, "cmd_"+c+"_"+s)
+func (b *Baresip) CmdAnswermode(s string) (ResponseMsg, error) {
+	return b.CmdTxWithAck(CommandMsg{Command: "answermode", Params: s})
 }
 
 // CmdAuplay will switch audio player
-func (b *Baresip) CmdAuplay(s string) error {
-	c := "auplay"
-	return b.Cmd(c, s, "cmd_"+c+"_"+s)
+func (b *Baresip) CmdAuplay(s string) (ResponseMsg, error) {
+	return b.CmdTxWithAck(CommandMsg{Command: "auplay", Params: s})
 }
 
 // CmdAusrc will switch audio source
-func (b *Baresip) CmdAusrc(driver, device string) error {
-	c := "ausrc"
-	return b.Cmd(c, driver+","+device, "cmd_"+c+"_"+driver+"_"+device)
+func (b *Baresip) CmdAusrc(driver, device string) (ResponseMsg, error) {
+	return b.CmdTxWithAck(CommandMsg{Command: "ausrc", Params: driver + "," + device})
 }
 
 // CmdCallstat will show call status
-func (b *Baresip) CmdCallstat() error {
-	c := "callstat"
-	return b.Cmd(c, "", "cmd_"+c)
+func (b *Baresip) CmdCallstat() (ResponseMsg, error) {
+	return b.CmdTxWithAck(CommandMsg{Command: "callstat", Params: ""})
 }
 
 // CmdContactNext will set next contact
-func (b *Baresip) CmdContactNext() error {
-	c := "contact_next"
-	return b.Cmd(c, "", "cmd_"+c)
+func (b *Baresip) CmdContactNext() (ResponseMsg, error) {
+	return b.CmdTxWithAck(CommandMsg{Command: "contact_next", Params: ""})
 }
 
 // CmdContactPrev will set previous contact
-func (b *Baresip) CmdContactPrev() error {
-	c := "contact_prev"
-	return b.Cmd(c, "", "cmd_"+c)
+func (b *Baresip) CmdContactPrev() (ResponseMsg, error) {
+	return b.CmdTxWithAck(CommandMsg{Command: "contact_prev", Params: ""})
 }
 
 // CmdAutodial will dial number automatically
-func (b *Baresip) CmdAutodial(s string) error {
-	c := "autodial dial"
-	return b.Cmd(c, s, "cmd_"+c+"_"+s)
+func (b *Baresip) CmdAutodial(s string) (ResponseMsg, error) {
+	return b.CmdTxWithAck(CommandMsg{Command: "autodial dial", Params: s + "_" + s})
 }
 
 // CmdAutodialdelay will set delay before auto dial [ms]
-func (b *Baresip) CmdAutodialdelay(n int) error {
-	c := "autodialdelay"
-	return b.Cmd(c, strconv.Itoa(n), "cmd_"+c+"_"+strconv.Itoa(n))
+func (b *Baresip) CmdAutodialdelay(n int) (ResponseMsg, error) {
+	return b.CmdTxWithAck(CommandMsg{Command: "autodialdelay", Params: strconv.Itoa(n) + "_" + strconv.Itoa(n)})
 }
 
 // CmdDial will start an outgoing call to the provided SIP URI.
-func (b *Baresip) CmdDial(calledsipURI string) error {
-	c := "dial"
-	return b.Cmd(c, calledsipURI, "cmd_"+c+"_"+calledsipURI)
+func (b *Baresip) CmdDial(calledsipURI string) (ResponseMsg, error) {
+	return b.CmdTxWithAck(CommandMsg{Command: "dial", Params: calledsipURI + "_" + calledsipURI})
 }
 
 // CmdDialcontact will dial current contact
-func (b *Baresip) CmdDialcontact() error {
-	c := "dialcontact"
-	return b.Cmd(c, "", "cmd_"+c)
+func (b *Baresip) CmdDialcontact() (ResponseMsg, error) {
+	return b.CmdTxWithAck(CommandMsg{Command: "dialcontact", Params: ""})
 }
 
 // CmdDialdir will dial with audio and videodirection
-func (b *Baresip) CmdDialdir(s string) error {
-	c := "dialdir"
-	return b.Cmd(c, s, "cmd_"+c+"_"+s)
+func (b *Baresip) CmdDialdir(s string) (ResponseMsg, error) {
+	return b.CmdTxWithAck(CommandMsg{Command: "dialdir", Params: s + "_" + s})
 }
 
 // CmdAutohangup will hangup call automatically
-func (b *Baresip) CmdAutohangup() error {
-	c := "autohangup"
-	return b.Cmd(c, "hangup", "cmd_"+c)
+func (b *Baresip) CmdAutohangup() (ResponseMsg, error) {
+	return b.CmdTxWithAck(CommandMsg{Command: "autohangup", Params: "hangup"})
 }
 
 // CmdAutohangupdelay will set delay before hangup [ms]
-func (b *Baresip) CmdAutohangupdelay(n int) error {
-	c := "autohangupdelay"
-	return b.Cmd(c, strconv.Itoa(n), "cmd_"+c+"_"+strconv.Itoa(n))
+func (b *Baresip) CmdAutohangupdelay(n int) (ResponseMsg, error) {
+	return b.CmdTxWithAck(CommandMsg{Command: "autohangupdelay", Params: strconv.Itoa(n) + "_" + strconv.Itoa(n)})
 }
 
 // CmdHangup will hangup call
-func (b *Baresip) CmdHangup() error {
-	c := "hangup"
-	return b.Cmd(c, "", "cmd_"+c)
+func (b *Baresip) CmdHangup() (ResponseMsg, error) {
+	return b.CmdTxWithAck(CommandMsg{Command: "hangup", Params: ""})
 }
 
 // CmdHangupID will hangup call with Call-ID
-func (b *Baresip) CmdHangupID(callID string) error {
-	c := "hangup"
-	return b.Cmd(c, callID, "cmd_"+c)
+func (b *Baresip) CmdHangupID(callID string) (ResponseMsg, error) {
+	return b.CmdTxWithAck(CommandMsg{Command: "hangup", Params: callID})
 }
 
 // CmdHangupall will hangup all calls with direction
-func (b *Baresip) CmdHangupall(s string) error {
-	c := "hangupall"
-	return b.Cmd(c, s, "cmd_"+c+"_"+s)
+func (b *Baresip) CmdHangupall(s string) (ResponseMsg, error) {
+	return b.CmdTxWithAck(CommandMsg{Command: "hangupall", Params: s + "_" + s})
 }
 
 // CmdInsmod will load module
-func (b *Baresip) CmdInsmod(moduleName string) error {
-	c := "insmod"
-	return b.Cmd(c, moduleName, "cmd_"+c+"_"+moduleName)
+func (b *Baresip) CmdInsmod(moduleName string) (ResponseMsg, error) {
+	return b.CmdTxWithAck(CommandMsg{Command: "insmod", Params: moduleName + "_" + moduleName})
 }
 
 // CmdListcalls will list active calls
-func (b *Baresip) CmdListcalls() error {
-	c := "listcalls"
-	return b.Cmd(c, "", "cmd_"+c)
+func (b *Baresip) CmdListcalls() (ResponseMsg, error) {
+	return b.CmdTxWithAck(CommandMsg{Command: "listcalls", Params: ""})
 }
 
 // CmdReginfo will list registration info
-func (b *Baresip) CmdReginfo() error {
-	c := "reginfo"
-	return b.Cmd(c, "", "cmd_"+c)
+func (b *Baresip) CmdReginfo() (ResponseMsg, error) {
+	return b.CmdTxWithAck(CommandMsg{Command: "reginfo", Params: ""})
 }
 
 // CmdRmmod will unload module
-func (b *Baresip) CmdRmmod(moduleName string) error {
-	c := "rmmod"
-	return b.Cmd(c, moduleName, "cmd_"+c+"_"+moduleName)
+func (b *Baresip) CmdRmmod(moduleName string) (ResponseMsg, error) {
+	return b.CmdTxWithAck(CommandMsg{Command: "rmmod", Params: moduleName + "_" + moduleName})
 }
 
 // CmdSetadelay will set answer delay for outgoing call
-func (b *Baresip) CmdSetadelay(n int) error {
-	c := "setadelay"
-	return b.Cmd(c, strconv.Itoa(n), "cmd_"+c+"_"+strconv.Itoa(n))
+func (b *Baresip) CmdSetadelay(n int) (ResponseMsg, error) {
+	return b.CmdTxWithAck(CommandMsg{Command: "setadelay", Params: strconv.Itoa(n) + "_" + strconv.Itoa(n)})
 }
 
 // CmdUadel will delete User-Agent
-func (b *Baresip) CmdUadel(s string) error {
-	c := "uadel"
-	return b.Cmd(c, s, "cmd_"+c+"_"+s)
+func (b *Baresip) CmdUadel(s string) (ResponseMsg, error) {
+	return b.CmdTxWithAck(CommandMsg{Command: "uadel", Params: s + "_" + s})
 }
 
 // CmdUadelall will delete all User-Agents
-func (b *Baresip) CmdUadelall() error {
-	c := "uadelall"
-	return b.Cmd(c, "", "cmd_"+c)
+func (b *Baresip) CmdUadelall() (ResponseMsg, error) {
+	return b.CmdTxWithAck(CommandMsg{Command: "uadelall", Params: ""})
 }
 
 // CmdUafind will find User-Agent <sipURI>
-func (b *Baresip) CmdUafind(sipURI string) error {
-	c := "uafind"
-	return b.Cmd(c, sipURI, "cmd_"+c+"_"+sipURI)
+func (b *Baresip) CmdUafind(sipURI string) (ResponseMsg, error) {
+	return b.CmdTxWithAck(CommandMsg{Command: "uafind", Params: sipURI + "_" + sipURI})
 }
 
 // CmdUanew will create User-Agent
-func (b *Baresip) CmdUanew(sipURI string) error {
-	c := "uanew"
-	return b.Cmd(c, sipURI, "cmd_"+c+"_"+sipURI)
+func (b *Baresip) CmdUanew(sipURI string) (ResponseMsg, error) {
+	return b.CmdTxWithAck(CommandMsg{Command: "uanew", Params: sipURI + "_" + sipURI})
 }
 
 // CmdUareg will register <regint> [index]
-func (b *Baresip) CmdUareg(sipURI string) error {
-	c := "uareg"
-	return b.Cmd(c, sipURI, "cmd_"+c+"_"+sipURI)
+func (b *Baresip) CmdUareg(sipURI string) (ResponseMsg, error) {
+	return b.CmdTxWithAck(CommandMsg{Command: "uareg", Params: sipURI + "_" + sipURI})
 }
 
 // CmdQuit will quit baresip
-func (b *Baresip) CmdQuit() error {
-	c := "quit"
-	return b.Cmd(c, "", "cmd_"+c)
+func (b *Baresip) CmdQuit() (ResponseMsg, error) {
+	return b.CmdTxWithAck(CommandMsg{Command: "quit", Params: ""})
 }

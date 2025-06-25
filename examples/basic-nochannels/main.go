@@ -76,7 +76,7 @@ func main() {
 		time.Sleep(15 * time.Second)
 
 		// Terminate baresip instance after 15 seconds... this is just a demo, you would normally not do this.
-		if err := gb.CmdQuit(); err != nil {
+		if _, err := gb.CmdQuit(); err != nil {
 			log.Println(err)
 		}
 	}()

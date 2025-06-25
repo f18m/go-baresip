@@ -79,7 +79,8 @@ func main() {
 				}
 				log.Println("RESPONSE: " + string(r.RawJSON))
 
-				// your logic goes here
+				// your logic to handle responses goes here. Or you use [Baresip.CmdTxWithAck()] and
+				// then you can avoid reading the response channel.
 			}
 		}
 	}()
@@ -88,8 +89,8 @@ func main() {
 		// Give baresip some time to init and register SIP User Agent
 		time.Sleep(5 * time.Second)
 
-		// Dial a dummy phone number
-		if err := gb.CmdDial("012345"); err != nil {
+		// Dial a dummy phone number -- the [Baresip.Cmd] function requires you to read from the "response channel"
+		if err := gb.Cmd("dial", "012345", "my_token"); err != nil {
 			log.Println(err)
 		}
 	}()
@@ -98,7 +99,7 @@ func main() {
 		time.Sleep(15 * time.Second)
 
 		// Terminate baresip instance after 15 seconds... this is just a demo, you would normally not do this.
-		if err := gb.CmdQuit(); err != nil {
+		if err := gb.Cmd("quit", "", "quit_token"); err != nil {
 			log.Println(err)
 		}
 	}()
