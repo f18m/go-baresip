@@ -73,7 +73,7 @@ import (
 
 */
 
-// CommandMsg defines the JSON structure accepted by Baresip ctrl_tcp socket
+// CommandMsg defines the JSON structure accepted by Baresip ctrl_tcp socket.
 // See doxygen docs at https://github.com/baresip/baresip/blob/main/modules/ctrl_tcp/ctrl_tcp.c
 type CommandMsg struct {
 	Command string `json:"command,omitempty"`

@@ -131,7 +131,18 @@ func (b *baresipInstanceController) SetDefaults() {
 	}
 }
 
-// Baresip is the main struct for managing a baresip instance.
+// Baresip is the main type provided by the go-baresip package.
+// Baresip connects to the TCP control socket of a baresip process and can send commands to it,
+// receive responses, and handle events.
+// Baresip is exposing decoded messages from the TCP control socket via channels:
+// - [GetResponseChan] for responses to commands sent by the user
+// - [GetEventChan] for events sent by baresip spontaneously
+// - [GetConnectedChan] for detecting successful connection to the baresip TCP control socket
+//
+// Typical way to use is to invoke [New] to create a new [Baresip] instance,
+// then call the blocking [Baresip.Serve] method in a dedicated goroutine.
+// Finally interact with baresip using [Baresip.CmdTxWithAck] to send commands
+// and receive responses, [Baresip.GetEventChan] to receive events, etc.
 type Baresip struct {
 	// BARESIP external process controller
 	runBaresipCmd bool
@@ -178,8 +189,9 @@ type Baresip struct {
 }
 
 // New creates a new [Baresip] instance with the provided options.
-// Options can be set using functional options like [SetAudioPath], [SetBaresipDebug],
-// [SetLogger], etc. If no options are provided, it will use default values.
+// Options can be set using functional options like [SetCtrlTCPAddr], [SetPingInterval],
+// [SetLogger], [SetInternalBaresipStartupOptions], etc.
+// If no options are provided, it will use default values.
 func New(options ...func(*Baresip) error) (*Baresip, error) {
 	b := &Baresip{
 		connectedChan: make(chan ConnectedMsg, 1),
@@ -508,4 +520,13 @@ func (b *Baresip) readOutput(name string, reader io.ReadCloser) {
 	}
 
 	b.logger.Infof("go-baresip goroutine stopped reading %s", name)
+}
+
+// GetStats returns the current statistics of the [Baresip] instance.
+// It includes the number of successful and failed commands, pings, and received messages.
+// The statistics are updated in real-time as the [Baresip] instance processes commands and
+// receives messages from the baresip control interface.
+// See [BareSipClientStats] struct.
+func (b *Baresip) GetStats() BareSipClientStats {
+	return b.ctrlStats
 }
