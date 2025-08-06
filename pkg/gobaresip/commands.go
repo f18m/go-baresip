@@ -212,17 +212,17 @@ func (b *Baresip) CmdContactPrev() (ResponseMsg, error) {
 
 // CmdAutodial will dial number automatically
 func (b *Baresip) CmdAutodial(s string) (ResponseMsg, error) {
-	return b.CmdTxWithAck(CommandMsg{Command: "autodial dial", Params: s + "_" + s})
+	return b.CmdTxWithAck(CommandMsg{Command: "autodial dial", Params: s})
 }
 
 // CmdAutodialdelay will set delay before auto dial [ms]
 func (b *Baresip) CmdAutodialdelay(n int) (ResponseMsg, error) {
-	return b.CmdTxWithAck(CommandMsg{Command: "autodialdelay", Params: strconv.Itoa(n) + "_" + strconv.Itoa(n)})
+	return b.CmdTxWithAck(CommandMsg{Command: "autodialdelay", Params: strconv.Itoa(n)})
 }
 
 // CmdDial will start an outgoing call to the provided SIP URI.
 func (b *Baresip) CmdDial(calledsipURI string) (ResponseMsg, error) {
-	return b.CmdTxWithAck(CommandMsg{Command: "dial", Params: calledsipURI + "_" + calledsipURI})
+	return b.CmdTxWithAck(CommandMsg{Command: "dial", Params: calledsipURI})
 }
 
 // CmdDialcontact will dial current contact
@@ -232,7 +232,7 @@ func (b *Baresip) CmdDialcontact() (ResponseMsg, error) {
 
 // CmdDialdir will dial with audio and videodirection
 func (b *Baresip) CmdDialdir(s string) (ResponseMsg, error) {
-	return b.CmdTxWithAck(CommandMsg{Command: "dialdir", Params: s + "_" + s})
+	return b.CmdTxWithAck(CommandMsg{Command: "dialdir", Params: s})
 }
 
 // CmdAutohangup will hangup call automatically
@@ -242,7 +242,7 @@ func (b *Baresip) CmdAutohangup() (ResponseMsg, error) {
 
 // CmdAutohangupdelay will set delay before hangup [ms]
 func (b *Baresip) CmdAutohangupdelay(n int) (ResponseMsg, error) {
-	return b.CmdTxWithAck(CommandMsg{Command: "autohangupdelay", Params: strconv.Itoa(n) + "_" + strconv.Itoa(n)})
+	return b.CmdTxWithAck(CommandMsg{Command: "autohangupdelay", Params: strconv.Itoa(n)})
 }
 
 // CmdHangup will hangup call
@@ -257,12 +257,12 @@ func (b *Baresip) CmdHangupID(callID string) (ResponseMsg, error) {
 
 // CmdHangupall will hangup all calls with direction
 func (b *Baresip) CmdHangupall(s string) (ResponseMsg, error) {
-	return b.CmdTxWithAck(CommandMsg{Command: "hangupall", Params: s + "_" + s})
+	return b.CmdTxWithAck(CommandMsg{Command: "hangupall", Params: s})
 }
 
 // CmdInsmod will load module
 func (b *Baresip) CmdInsmod(moduleName string) (ResponseMsg, error) {
-	return b.CmdTxWithAck(CommandMsg{Command: "insmod", Params: moduleName + "_" + moduleName})
+	return b.CmdTxWithAck(CommandMsg{Command: "insmod", Params: moduleName})
 }
 
 // CmdListcalls will list active calls
@@ -277,17 +277,17 @@ func (b *Baresip) CmdReginfo() (ResponseMsg, error) {
 
 // CmdRmmod will unload module
 func (b *Baresip) CmdRmmod(moduleName string) (ResponseMsg, error) {
-	return b.CmdTxWithAck(CommandMsg{Command: "rmmod", Params: moduleName + "_" + moduleName})
+	return b.CmdTxWithAck(CommandMsg{Command: "rmmod", Params: moduleName})
 }
 
 // CmdSetadelay will set answer delay for outgoing call
 func (b *Baresip) CmdSetadelay(n int) (ResponseMsg, error) {
-	return b.CmdTxWithAck(CommandMsg{Command: "setadelay", Params: strconv.Itoa(n) + "_" + strconv.Itoa(n)})
+	return b.CmdTxWithAck(CommandMsg{Command: "setadelay", Params: strconv.Itoa(n)})
 }
 
 // CmdUadel will delete User-Agent
 func (b *Baresip) CmdUadel(s string) (ResponseMsg, error) {
-	return b.CmdTxWithAck(CommandMsg{Command: "uadel", Params: s + "_" + s})
+	return b.CmdTxWithAck(CommandMsg{Command: "uadel", Params: s})
 }
 
 // CmdUadelall will delete all User-Agents
@@ -297,17 +297,17 @@ func (b *Baresip) CmdUadelall() (ResponseMsg, error) {
 
 // CmdUafind will find User-Agent <sipURI>
 func (b *Baresip) CmdUafind(sipURI string) (ResponseMsg, error) {
-	return b.CmdTxWithAck(CommandMsg{Command: "uafind", Params: sipURI + "_" + sipURI})
+	return b.CmdTxWithAck(CommandMsg{Command: "uafind", Params: sipURI})
 }
 
 // CmdUanew will create User-Agent
 func (b *Baresip) CmdUanew(sipURI string) (ResponseMsg, error) {
-	return b.CmdTxWithAck(CommandMsg{Command: "uanew", Params: sipURI + "_" + sipURI})
+	return b.CmdTxWithAck(CommandMsg{Command: "uanew", Params: sipURI})
 }
 
 // CmdUareg will register <regint> [index]
 func (b *Baresip) CmdUareg(sipURI string) (ResponseMsg, error) {
-	return b.CmdTxWithAck(CommandMsg{Command: "uareg", Params: sipURI + "_" + sipURI})
+	return b.CmdTxWithAck(CommandMsg{Command: "uareg", Params: sipURI})
 }
 
 // CmdQuit will quit baresip
