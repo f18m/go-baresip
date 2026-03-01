@@ -461,7 +461,7 @@ func (b *Baresip) connectCtrl() error {
 	attempts := 0
 	for {
 		b.logger.Infof("attempting to connect to control socket at %s (attempt %d)", b.ctrlAddr, attempts+1)
-		b.ctrlConn, err = net.DialContext("tcp", b.ctrlAddr)
+		b.ctrlConn, err = net.Dial("tcp", b.ctrlAddr)
 		switch {
 		case errors.Is(err, syscall.ECONNREFUSED):
 			attempts++
