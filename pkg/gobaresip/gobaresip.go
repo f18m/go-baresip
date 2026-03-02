@@ -349,7 +349,7 @@ func (b *Baresip) Serve(ctx context.Context) error {
 	}
 
 	// Connect to the control TCP socket
-	if err := b.connectCtrl(); err != nil {
+	if err := b.connectCtrl(ctx); err != nil {
 		return err
 	}
 
@@ -455,13 +455,15 @@ func (b *Baresip) startInternalBaresip() error {
 	return nil
 }
 
-func (b *Baresip) connectCtrl() error {
+func (b *Baresip) connectCtrl(ctx context.Context) error {
 	var err error
+
+	var dialer net.Dialer
 
 	attempts := 0
 	for {
 		b.logger.Infof("attempting to connect to control socket at %s (attempt %d)", b.ctrlAddr, attempts+1)
-		b.ctrlConn, err = net.Dial("tcp", b.ctrlAddr)
+		b.ctrlConn, err = dialer.DialContext(ctx, "tcp", b.ctrlAddr)
 		switch {
 		case errors.Is(err, syscall.ECONNREFUSED):
 			attempts++
